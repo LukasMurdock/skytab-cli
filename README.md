@@ -4,6 +4,24 @@ A command-line client for the SkyTab API.
 
 ## Install
 
+### One-line install (recommended)
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/LukasMurdock/skytab-cli/main/install.sh | sh
+```
+
+Install a specific release tag:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/LukasMurdock/skytab-cli/main/install.sh | VERSION=v0.1.0 sh
+```
+
+By default this installs to `~/.local/bin`. Override with `INSTALL_DIR`:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/LukasMurdock/skytab-cli/main/install.sh | INSTALL_DIR=/usr/local/bin sh
+```
+
 ### From source (local)
 
 ```bash
@@ -168,3 +186,5 @@ skytab request --method get --path /api/v2/locations --json
 ## Development
 
 See `CONTRIBUTING.md` for local development, formatting, and release workflow.
+
+Release history is tracked in `CHANGELOG.md`.

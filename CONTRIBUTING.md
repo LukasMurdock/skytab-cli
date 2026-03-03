@@ -89,3 +89,11 @@ CI release workflow:
 - Keep changes focused and scoped.
 - Update docs when behavior or flags change.
 - Include before/after command examples for CLI UX changes.
+
+## Changelog
+
+Update `CHANGELOG.md` for user-facing changes.
+
+- Add a short bullet under `## [Unreleased]` in the most relevant section.
+- Keep entries concise and outcome-focused.
+- At release time, move `Unreleased` entries into the new version section.
