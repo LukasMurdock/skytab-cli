@@ -7,19 +7,19 @@ A command-line client for the SkyTab API.
 ### One-line install (recommended)
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/LukasMurdock/skytab-cli/main/install.sh | sh
+curl -fsSL https://github.com/LukasMurdock/skytab-cli/releases/latest/download/install.sh | sh
 ```
 
 Install a specific release tag:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/LukasMurdock/skytab-cli/main/install.sh | VERSION=v0.1.0 sh
+curl -fsSL https://github.com/LukasMurdock/skytab-cli/releases/download/v0.1.2/install.sh | sh
 ```
 
 By default this installs to `~/.local/bin`. Override with `INSTALL_DIR`:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/LukasMurdock/skytab-cli/main/install.sh | INSTALL_DIR=/usr/local/bin sh
+curl -fsSL https://github.com/LukasMurdock/skytab-cli/releases/latest/download/install.sh | INSTALL_DIR=/usr/local/bin sh
 ```
 
 ### From source (local)
