@@ -80,6 +80,7 @@ skytab locations set-default --location-id 43101562
 ```
 
 With a default location set, most location flags can be omitted.
+If your account has exactly one location, the CLI auto-selects it.
 
 ## Common Commands
 

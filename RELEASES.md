@@ -54,7 +54,8 @@ Before tagging:
    - `cargo check`
 3. (Optional) Build local package:
    - `./scripts/package-local.sh`
-4. Ensure docs are up to date (`README.md`, `CONTRIBUTING.md`, this file).
+4. Update `CHANGELOG.md` with the release version and notable changes.
+5. Ensure docs are up to date (`README.md`, `CONTRIBUTING.md`, this file).
 
 ## Creating a Release
 

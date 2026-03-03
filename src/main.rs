@@ -290,7 +290,7 @@ async fn run(cli: Cli) -> Result<()> {
                 end,
                 location,
             } => {
-                let location = resolve_single_location(location).await?;
+                let location = resolve_single_location(location, cli.base_url.clone()).await?;
                 let client = build_client(cli.base_url.clone()).await?;
                 let (start, end) =
                     normalize_range_for_locations_timezones(&client, &[location], start, end)
@@ -324,7 +324,7 @@ async fn run(cli: Cli) -> Result<()> {
                 end,
                 location,
             } => {
-                let location = resolve_locations(location).await?;
+                let location = resolve_locations(location, cli.base_url.clone()).await?;
                 let client = build_client(cli.base_url.clone()).await?;
                 let (start, end) =
                     normalize_range_for_locations_timezones(&client, &location, start, end).await?;
@@ -348,7 +348,7 @@ async fn run(cli: Cli) -> Result<()> {
                 end,
                 location,
             } => {
-                let location = resolve_locations(location).await?;
+                let location = resolve_locations(location, cli.base_url.clone()).await?;
                 let client = build_client(cli.base_url.clone()).await?;
                 let (start, end) =
                     normalize_range_for_locations_timezones(&client, &location, start, end).await?;
@@ -376,7 +376,7 @@ async fn run(cli: Cli) -> Result<()> {
                 end,
                 location,
             } => {
-                let location = resolve_locations(location).await?;
+                let location = resolve_locations(location, cli.base_url.clone()).await?;
                 let client = build_client(cli.base_url.clone()).await?;
                 let (start, end) =
                     normalize_range_for_locations_timezones(&client, &location, start, end).await?;
@@ -402,7 +402,7 @@ async fn run(cli: Cli) -> Result<()> {
                 end,
                 location,
             } => {
-                let location = resolve_locations(location).await?;
+                let location = resolve_locations(location, cli.base_url.clone()).await?;
                 let client = build_client(cli.base_url.clone()).await?;
                 let (start, end) =
                     normalize_range_for_locations_timezones(&client, &location, start, end).await?;
@@ -426,7 +426,7 @@ async fn run(cli: Cli) -> Result<()> {
                 end,
                 location,
             } => {
-                let location = resolve_locations(location).await?;
+                let location = resolve_locations(location, cli.base_url.clone()).await?;
                 let client = build_client(cli.base_url.clone()).await?;
                 let (start, end) =
                     normalize_range_for_locations_timezones(&client, &location, start, end).await?;
@@ -450,7 +450,7 @@ async fn run(cli: Cli) -> Result<()> {
                 end,
                 location,
             } => {
-                let location = resolve_locations(location).await?;
+                let location = resolve_locations(location, cli.base_url.clone()).await?;
                 let client = build_client(cli.base_url.clone()).await?;
                 let (start, end) =
                     normalize_range_for_locations_timezones(&client, &location, start, end).await?;
@@ -475,7 +475,7 @@ async fn run(cli: Cli) -> Result<()> {
                 end,
                 location,
             } => {
-                let location = resolve_locations(location).await?;
+                let location = resolve_locations(location, cli.base_url.clone()).await?;
                 let client = build_client(cli.base_url.clone()).await?;
                 let (start, end) =
                     normalize_range_for_locations_timezones(&client, &location, start, end).await?;
@@ -504,7 +504,8 @@ async fn run(cli: Cli) -> Result<()> {
                 order,
                 limit,
             } => {
-                let location_id = resolve_single_location(location_id).await?;
+                let location_id =
+                    resolve_single_location(location_id, cli.base_url.clone()).await?;
                 let client = build_client(cli.base_url.clone()).await?;
                 let (start, end) =
                     normalize_range_for_location_timezone(&client, location_id, start, end).await?;
@@ -524,7 +525,7 @@ async fn run(cli: Cli) -> Result<()> {
                 location,
                 order_type,
             } => {
-                let location = resolve_locations(location).await?;
+                let location = resolve_locations(location, cli.base_url.clone()).await?;
                 let client = build_client(cli.base_url.clone()).await?;
                 let result = fetch_transactions(&client, start, end, location, order_type).await?;
                 if cli.json {
@@ -887,7 +888,7 @@ fn build_report_payload(start: String, end: String, locations: Vec<i64>) -> Valu
     })
 }
 
-async fn resolve_single_location(location: Option<i64>) -> Result<i64> {
+async fn resolve_single_location(location: Option<i64>, base_url: Option<String>) -> Result<i64> {
     if let Some(location) = location {
         return Ok(location);
     }
@@ -896,13 +897,17 @@ async fn resolve_single_location(location: Option<i64>) -> Result<i64> {
         return Ok(default_location_id);
     }
 
+    if let Some(single_location_id) = resolve_sole_available_location(base_url).await? {
+        return Ok(single_location_id);
+    }
+
     Err(SkyTabError::InvalidArgument(
-        "location is required; pass --location/--location-id or set a default with `locations set-default`"
+        "location is required; pass --location/--location-id, set a default with `locations set-default`, or rely on auto-selection when exactly one location is available"
             .into(),
     ))
 }
 
-async fn resolve_locations(locations: Vec<i64>) -> Result<Vec<i64>> {
+async fn resolve_locations(locations: Vec<i64>, base_url: Option<String>) -> Result<Vec<i64>> {
     if !locations.is_empty() {
         return Ok(locations);
     }
@@ -911,10 +916,28 @@ async fn resolve_locations(locations: Vec<i64>) -> Result<Vec<i64>> {
         return Ok(vec![default_location_id]);
     }
 
+    if let Some(single_location_id) = resolve_sole_available_location(base_url).await? {
+        return Ok(vec![single_location_id]);
+    }
+
     Err(SkyTabError::InvalidArgument(
-        "at least one location is required; pass --location or set a default with `locations set-default`"
+        "at least one location is required; pass --location, set a default with `locations set-default`, or rely on auto-selection when exactly one location is available"
             .into(),
     ))
+}
+
+async fn resolve_sole_available_location(base_url: Option<String>) -> Result<Option<i64>> {
+    let client = build_client(base_url).await?;
+    let raw_locations: Value = client
+        .request_authed_json(Method::GET, "/api/v2/locations", &Vec::new(), None)
+        .await?;
+    let locations = parse_locations_response(raw_locations)?;
+
+    if locations.len() == 1 {
+        return Ok(Some(locations[0].id));
+    }
+
+    Ok(None)
 }
 
 fn map_method(method: HttpMethod) -> Method {

@@ -6,23 +6,16 @@ The format is based on Keep a Changelog and this project uses Semantic Versionin
 
 ## [Unreleased]
 
-### Added
-
-- `doctor` command for env/config/auth/cache diagnostics.
-- `reports till-transaction` and `reports payroll` commands.
-- typed payroll and till-transaction output models.
-- `-v/--verbose` request timing and retry diagnostics.
+## [0.1.4] - 2026-03-03
 
 ### Changed
 
-- CLI binary name changed from `skytab-cli` to `skytab`.
-- credentials and token cache paths moved to `skytab/` with legacy fallback reads.
-- date-only range inputs now resolve using location timezone boundaries.
+- auto-select a location when account access includes exactly one location and no `--location` is passed.
 
 ### Docs
 
-- split user-facing docs (`README.md`) and contributor docs (`CONTRIBUTING.md`).
-- added release process guide in `RELEASES.md`.
+- document single-location auto-selection in `README.md`.
+- add explicit `CHANGELOG.md` update step to `RELEASES.md` checklist.
 
 ## [0.1.0] - 2026-03-03
 
@@ -33,5 +26,6 @@ The format is based on Keep a Changelog and this project uses Semantic Versionin
 - default location support.
 - release workflow for macOS and Linux artifacts.
 
-[Unreleased]: https://github.com/LukasMurdock/skytab-cli/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/LukasMurdock/skytab-cli/compare/v0.1.4...HEAD
+[0.1.4]: https://github.com/LukasMurdock/skytab-cli/releases/tag/v0.1.4
 [0.1.0]: https://github.com/LukasMurdock/skytab-cli/releases/tag/v0.1.0
