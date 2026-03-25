@@ -366,6 +366,7 @@ async fn run(cli: Cli) -> Result<()> {
                 if cli.json {
                     print_output(true, &serde_json::to_value(report)?);
                 } else {
+                    println!("DATE\tHOUR\tGROSS\tNET");
                     for row in report.rows {
                         println!("{}\t{}\t{}\t{}", row[0], row[1], row[2], row[3]);
                     }
