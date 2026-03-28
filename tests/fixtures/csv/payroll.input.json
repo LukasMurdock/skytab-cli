@@ -1,0 +1,40 @@
+{
+  "employees": [
+    {
+      "employee_id": "1",
+      "employee_name": "Alice Smith",
+      "normal_hours": 8.0,
+      "overtime_hours": 1.0,
+      "double_overtime_hours": 0.0,
+      "normal_pay": 120.0,
+      "overtime_pay": 22.5,
+      "double_overtime_pay": 0.0,
+      "total_gratuity": 15.25,
+      "total_pay": 157.75,
+      "adjusted_tips": 2.5,
+      "tip_reduction": 0.0,
+      "declared_tips": 30.0,
+      "gross_tips": 35.0,
+      "tip_share": 5.0,
+      "net_tips": 30.0
+    }
+  ],
+  "totals": {
+    "employee_id": "TOTAL",
+    "employee_name": "TOTAL",
+    "normal_hours": 8.0,
+    "overtime_hours": 1.0,
+    "double_overtime_hours": 0.0,
+    "normal_pay": 120.0,
+    "overtime_pay": 22.5,
+    "double_overtime_pay": 0.0,
+    "total_gratuity": 15.25,
+    "total_pay": 157.75,
+    "adjusted_tips": 2.5,
+    "tip_reduction": 0.0,
+    "declared_tips": 30.0,
+    "gross_tips": 35.0,
+    "tip_share": 5.0,
+    "net_tips": 30.0
+  }
+}

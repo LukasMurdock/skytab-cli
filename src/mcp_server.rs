@@ -379,7 +379,15 @@ fn map_tool_error(err: SkyTabError) -> Value {
     match err {
         SkyTabError::MissingCredentials => json!({
             "kind": "missing_credentials",
-            "message": "missing SKYTAB_USERNAME or SKYTAB_PASSWORD"
+            "message": "missing credentials; set SKYTAB_USERNAME/SKYTAB_PASSWORD or run `skytab auth set-credentials`"
+        }),
+        SkyTabError::PartialEnvCredentials => json!({
+            "kind": "partial_env_credentials",
+            "message": "set both SKYTAB_USERNAME and SKYTAB_PASSWORD"
+        }),
+        SkyTabError::CredentialStore(message) => json!({
+            "kind": "credential_store_error",
+            "message": message
         }),
         SkyTabError::InvalidArgument(message) => json!({
             "kind": "invalid_argument",

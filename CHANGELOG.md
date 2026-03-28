@@ -10,14 +10,33 @@ The format is based on Keep a Changelog and this project uses Semantic Versionin
 
 - add `skytab-mcp`, a read-only MCP server exposing auth, locations, reports, timeclock, payments, request GET, and doctor tools.
 - extract shared read-only API logic into `src/read_api.rs` so CLI and MCP use the same core paths.
+- add structured output export options: `--format json|csv|ndjson` and `--output <path>`.
+- add stable CSV schemas for `reports hourly-sales`, `reports payroll`, `timeclock shifts`, and `payments transactions`.
+- add `skytab completion <bash|zsh|fish>` to generate shell completion scripts.
+- add installer opt-in completion snippets with `PRINT_COMPLETION_SNIPPETS=1`.
+- add `scripts/update-csv-fixtures.sh` to regenerate CSV golden fixtures.
+- add keyring-backed credential storage (with config fallback in `auto` mode).
 
 ### CI
 
 - add a dedicated `ci` workflow with separate `rust-checks` and `mcp-protocol-tests` jobs.
+- run `csv_schema_golden` integration tests in `rust-checks`.
 
 ### Changed
 
 - add a labeled header row (`DATE`, `HOUR`, `GROSS`, `NET`) to `reports hourly-sales` human output.
+- route report, timeclock, payments, and doctor commands through shared structured output handling.
+- block mutating `request` methods by default; require explicit `--allow-write` for `post`, `put`, `patch`, and `delete`.
+- enforce full env credential pairs (error on only one of `SKYTAB_USERNAME`/`SKYTAB_PASSWORD`).
+- harden token cache writes to private file permissions on unix (`0600`).
+
+### Docs
+
+- add a "First Useful Output (5 Minutes)" quick path and shell completion examples to `README.md`.
+
+### Tests
+
+- add CSV golden fixture tests for hourly sales, payroll, timeclock shifts, and payments transactions.
 
 ## [0.1.4] - 2026-03-03
 

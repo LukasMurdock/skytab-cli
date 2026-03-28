@@ -22,6 +22,12 @@ By default this installs to `~/.local/bin`. Override with `INSTALL_DIR`:
 curl -fsSL https://github.com/LukasMurdock/skytab-cli/releases/latest/download/install.sh | INSTALL_DIR=/usr/local/bin sh
 ```
 
+Print shell completion setup snippets after install:
+
+```bash
+curl -fsSL https://github.com/LukasMurdock/skytab-cli/releases/latest/download/install.sh | PRINT_COMPLETION_SNIPPETS=1 sh
+```
+
 ### From source (local)
 
 ```bash
@@ -64,6 +70,15 @@ export SKYTAB_PASSWORD="your-password"
 skytab auth set-credentials --username "you@example.com" --prompt-password
 ```
 
+By default, `set-credentials` stores passwords in the OS credential store (keychain/keyring) when available.
+If secure storage is unavailable, it falls back to `config.toml` in `auto` mode.
+
+Credential store mode (`SKYTAB_CREDENTIAL_STORE`):
+
+- `auto` (default): prefer keyring, fallback to config file
+- `keyring`: require keyring, fail if unavailable
+- `config`: always store/read password in config file (legacy)
+
 Config file location:
 
 - macOS: `~/Library/Application Support/skytab/config.toml`
@@ -72,7 +87,8 @@ Config file location:
 Credential precedence:
 
 1. `SKYTAB_USERNAME` / `SKYTAB_PASSWORD`
-2. platform `config.toml`
+2. username + base URL from `config.toml`, password from keyring/keychain
+3. legacy `password` in `config.toml` (migration fallback)
 
 ## Quick Start
 
@@ -84,6 +100,16 @@ skytab locations set-default --location-id 43101562
 
 With a default location set, most location flags can be omitted.
 If your account has exactly one location, the CLI auto-selects it.
+
+## First Useful Output (5 Minutes)
+
+```bash
+skytab auth login --json
+skytab locations list
+skytab reports hourly-sales --start "2026-03-01" --end "2026-03-01" --format csv --output hourly-sales.csv
+```
+
+This gives you a login check, location discovery, and an exportable report.
 
 ## MCP Server (Read-Only)
 
@@ -165,6 +191,13 @@ skytab reports till-transaction --start "2026-03-01" --end "2026-03-01" --json
 skytab reports payroll --start "2026-03-01" --end "2026-03-01" --json
 ```
 
+Export report results:
+
+```bash
+skytab reports payroll --start "2026-03-01" --end "2026-03-01" --format csv --output payroll.csv
+skytab reports hourly-sales --start "2026-03-01" --end "2026-03-01" --format ndjson --output hourly-sales.ndjson
+```
+
 Date-only ranges (`YYYY-MM-DD`) are expanded using location timezone boundaries.
 For multi-location calls, all locations must share a timezone when using date-only input.
 
@@ -173,12 +206,14 @@ For multi-location calls, all locations must share a timezone when using date-on
 ```bash
 skytab timeclock shifts --start "2026-03-01" --end "2026-03-01"
 skytab timeclock shifts --start "2026-03-01" --end "2026-03-01" --json
+skytab timeclock shifts --start "2026-03-01" --end "2026-03-01" --format csv --output shifts.csv
 ```
 
 ### Payments
 
 ```bash
 skytab payments transactions --start "2026-03-01" --end "2026-03-01" --order-type SALE --json
+skytab payments transactions --start "2026-03-01" --end "2026-03-01" --format ndjson --output payments.ndjson
 ```
 
 ### Accounts
@@ -191,7 +226,10 @@ skytab accounts preferences --account-id 123456 --json
 
 ```bash
 skytab request --method get --path /api/v2/locations --json
+skytab request --method post --path /api/v2/example --body '{"hello":"world"}' --allow-write --json
 ```
+
+Mutating request methods (`post`, `put`, `patch`, `delete`) are blocked unless `--allow-write` is passed.
 
 ### Diagnostics
 
@@ -200,9 +238,28 @@ skytab doctor
 skytab doctor --json
 ```
 
+### Shell completion
+
+```bash
+skytab completion bash > ~/.local/share/bash-completion/completions/skytab
+skytab completion zsh > ~/.zfunc/_skytab
+skytab completion fish > ~/.config/fish/completions/skytab.fish
+```
+
+### Stable CSV schemas
+
+- `reports hourly-sales`: `date,hour,gross,net`
+- `reports payroll`: `row_type,employee_id,employee_name,...,net_tips`
+- `timeclock shifts`: `shift_guid,employee_name,clocked_in_at,...,location_id`
+- `payments transactions`: `transaction_id,date,type,status,...,raw_json`
+- Update golden fixtures after schema changes: `./scripts/update-csv-fixtures.sh`
+
 ## Output and Flags
 
 - `--json` pretty JSON output
+- `--format json|csv|ndjson` structured output format
+- `--output <path>` write output to a file (without `--format`, writes JSON)
+- `request --allow-write` required for mutating HTTP methods (`post`, `put`, `patch`, `delete`)
 - `-v, --verbose` request timing and diagnostics (`-vv` for debug-level detail)
 - `--base-url` override API base URL
 

@@ -6,6 +6,7 @@ BIN_NAME="${BIN_NAME:-skytab}"
 ARCHIVE_NAME="${ARCHIVE_NAME:-skytab}"
 INSTALL_DIR="${INSTALL_DIR:-$HOME/.local/bin}"
 VERSION="${VERSION:-latest}"
+PRINT_COMPLETION_SNIPPETS="${PRINT_COMPLETION_SNIPPETS:-0}"
 
 require_cmd() {
   if ! command -v "$1" >/dev/null 2>&1; then
@@ -87,6 +88,70 @@ resolve_version() {
   echo "$latest_tag"
 }
 
+is_truthy() {
+  case "${1:-}" in
+    1|true|TRUE|yes|YES|on|ON)
+      return 0
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
+print_completion_snippets() {
+  if [ "$BIN_NAME" != "skytab" ]; then
+    echo "Skipping completion snippets: '$BIN_NAME' does not support shell completion output."
+    return
+  fi
+
+  shell_name="$(basename "${SHELL:-}")"
+  echo
+  echo "Shell completion setup snippets:"
+
+  case "$shell_name" in
+    bash)
+      completion_path="${XDG_DATA_HOME:-$HOME/.local/share}/bash-completion/completions/$BIN_NAME"
+      completion_dir="$(dirname "$completion_path")"
+      echo "  mkdir -p \"$completion_dir\""
+      echo "  $BIN_NAME completion bash > \"$completion_path\""
+      ;;
+    zsh)
+      zfunc_dir="${ZDOTDIR:-$HOME}/.zfunc"
+      echo "  mkdir -p \"$zfunc_dir\""
+      echo "  $BIN_NAME completion zsh > \"$zfunc_dir/_$BIN_NAME\""
+      echo "  # ensure your ~/.zshrc includes:"
+      echo "  fpath=(\"$zfunc_dir\" \$fpath)"
+      echo "  autoload -Uz compinit && compinit"
+      ;;
+    fish)
+      completion_path="${XDG_CONFIG_HOME:-$HOME/.config}/fish/completions/$BIN_NAME.fish"
+      completion_dir="$(dirname "$completion_path")"
+      echo "  mkdir -p \"$completion_dir\""
+      echo "  $BIN_NAME completion fish > \"$completion_path\""
+      ;;
+    *)
+      bash_path="${XDG_DATA_HOME:-$HOME/.local/share}/bash-completion/completions/$BIN_NAME"
+      zfunc_dir="${ZDOTDIR:-$HOME}/.zfunc"
+      fish_path="${XDG_CONFIG_HOME:-$HOME/.config}/fish/completions/$BIN_NAME.fish"
+      echo "  # bash"
+      echo "  mkdir -p \"$(dirname "$bash_path")\""
+      echo "  $BIN_NAME completion bash > \"$bash_path\""
+      echo
+      echo "  # zsh"
+      echo "  mkdir -p \"$zfunc_dir\""
+      echo "  $BIN_NAME completion zsh > \"$zfunc_dir/_$BIN_NAME\""
+      echo "  # ensure your ~/.zshrc includes:"
+      echo "  fpath=(\"$zfunc_dir\" \$fpath)"
+      echo "  autoload -Uz compinit && compinit"
+      echo
+      echo "  # fish"
+      echo "  mkdir -p \"$(dirname "$fish_path")\""
+      echo "  $BIN_NAME completion fish > \"$fish_path\""
+      ;;
+  esac
+}
+
 require_cmd curl
 require_cmd tar
 
@@ -141,3 +206,11 @@ case ":$PATH:" in
 esac
 
 echo "Run: $BIN_NAME --help"
+
+if [ "$BIN_NAME" = "skytab" ] && ! is_truthy "$PRINT_COMPLETION_SNIPPETS"; then
+  echo "Tip: set PRINT_COMPLETION_SNIPPETS=1 to print shell completion setup commands."
+fi
+
+if is_truthy "$PRINT_COMPLETION_SNIPPETS"; then
+  print_completion_snippets
+fi
