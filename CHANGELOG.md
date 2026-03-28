@@ -11,11 +11,13 @@ The format is based on Keep a Changelog and this project uses Semantic Versionin
 - add `skytab-mcp`, a read-only MCP server exposing auth, locations, reports, timeclock, payments, request GET, and doctor tools.
 - extract shared read-only API logic into `src/read_api.rs` so CLI and MCP use the same core paths.
 - add structured output export options: `--format json|csv|ndjson` and `--output <path>`.
-- add stable CSV schemas for `reports hourly-sales`, `reports payroll`, `timeclock shifts`, and `payments transactions`.
+- add stable CSV schemas for `reports hourly-sales`, `reports payroll`, `timeclock shifts`, `payments transactions`, and all `insights` commands.
 - add `skytab completion <bash|zsh|fish>` to generate shell completion scripts.
 - add installer opt-in completion snippets with `PRINT_COMPLETION_SNIPPETS=1`.
 - add `scripts/update-csv-fixtures.sh` to regenerate CSV golden fixtures.
 - add keyring-backed credential storage (with config fallback in `auto` mode).
+- add `insights` command group with `daily-brief`, `labor-vs-sales`, and `payment-mix` decision summaries.
+- add MCP tools for insights: `skytab.insights.daily_brief`, `skytab.insights.labor_vs_sales`, `skytab.insights.payment_mix`, and composite `skytab.insights.end_of_day`.
 
 ### CI
 
@@ -33,6 +35,7 @@ The format is based on Keep a Changelog and this project uses Semantic Versionin
 ### Docs
 
 - add a "First Useful Output (5 Minutes)" quick path and shell completion examples to `README.md`.
+- add task-oriented MCP prompt examples in `README.md` for daily brief, labor-vs-sales, and payment-mix workflows.
 
 ### Tests
 

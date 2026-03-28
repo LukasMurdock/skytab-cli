@@ -1,0 +1,60 @@
+{
+  "name": "Payroll by Employee",
+  "headers": [
+    "Employee Id",
+    "Employee Name",
+    "Normal Hours",
+    "OT",
+    "Double OT",
+    "Normal Pay",
+    "OT Pay",
+    "Double OT Pay",
+    "Gratuity",
+    "Total Pay",
+    "Adjusted Tips",
+    "Tip Reduction",
+    "Declared Tips",
+    "Gross Tips",
+    "Tip Share",
+    "Net Tips"
+  ],
+  "rows": [
+    [
+      "100",
+      "Alice Smith",
+      "8",
+      "1",
+      "0",
+      "$120.00",
+      "$22.50",
+      "$0.00",
+      "$15.25",
+      "$157.75",
+      "$2.50",
+      "$0.00",
+      "$30.00",
+      "$35.00",
+      "$5.00",
+      "$30.00"
+    ],
+    [
+      "TOTAL",
+      "TOTAL",
+      "8",
+      "1",
+      "0",
+      "$120.00",
+      "$22.50",
+      "$0.00",
+      "$15.25",
+      "$157.75",
+      "$2.50",
+      "$0.00",
+      "$30.00",
+      "$35.00",
+      "$5.00",
+      "$30.00"
+    ]
+  ],
+  "custom": false
+}

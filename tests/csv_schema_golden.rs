@@ -80,3 +80,18 @@ fn timeclock_csv_matches_golden_fixture() {
 fn payments_csv_matches_golden_fixture() {
     assert_schema_matches_fixture("payments_transactions", CsvSchema::PaymentsTransactions);
 }
+
+#[test]
+fn insights_daily_brief_csv_matches_golden_fixture() {
+    assert_schema_matches_fixture("insights_daily_brief", CsvSchema::InsightsDailyBrief);
+}
+
+#[test]
+fn insights_labor_vs_sales_csv_matches_golden_fixture() {
+    assert_schema_matches_fixture("insights_labor_vs_sales", CsvSchema::InsightsLaborVsSales);
+}
+
+#[test]
+fn insights_payment_mix_csv_matches_golden_fixture() {
+    assert_schema_matches_fixture("insights_payment_mix", CsvSchema::InsightsPaymentMix);
+}

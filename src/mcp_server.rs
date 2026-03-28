@@ -15,6 +15,10 @@ pub const READ_ONLY_TOOL_NAMES: &[&str] = &[
     "skytab.accounts.preferences",
     "skytab.auth.login",
     "skytab.doctor",
+    "skytab.insights.daily_brief",
+    "skytab.insights.end_of_day",
+    "skytab.insights.labor_vs_sales",
+    "skytab.insights.payment_mix",
     "skytab.locations.list",
     "skytab.locations.show_default",
     "skytab.payments.transactions",
@@ -282,6 +286,66 @@ impl SkyTabMcpServer {
     }
 
     #[tool(
+        name = "skytab.insights.daily_brief",
+        description = "Build a daily operations brief from sales, labor, and payments"
+    )]
+    async fn insights_daily_brief(
+        &self,
+        Parameters(args): Parameters<MultiLocationReportArgs>,
+    ) -> std::result::Result<CallToolResult, McpError> {
+        map_result(
+            self.api
+                .insight_daily_brief(args.start, args.end, args.location)
+                .await,
+        )
+    }
+
+    #[tool(
+        name = "skytab.insights.end_of_day",
+        description = "Build daily-brief, labor-vs-sales, and payment-mix in a single call"
+    )]
+    async fn insights_end_of_day(
+        &self,
+        Parameters(args): Parameters<MultiLocationReportArgs>,
+    ) -> std::result::Result<CallToolResult, McpError> {
+        map_result(
+            self.api
+                .insight_end_of_day(args.start, args.end, args.location)
+                .await,
+        )
+    }
+
+    #[tool(
+        name = "skytab.insights.labor_vs_sales",
+        description = "Compare labor cost and hours against sales"
+    )]
+    async fn insights_labor_vs_sales(
+        &self,
+        Parameters(args): Parameters<MultiLocationReportArgs>,
+    ) -> std::result::Result<CallToolResult, McpError> {
+        map_result(
+            self.api
+                .insight_labor_vs_sales(args.start, args.end, args.location)
+                .await,
+        )
+    }
+
+    #[tool(
+        name = "skytab.insights.payment_mix",
+        description = "Summarize payment mix by type and tender"
+    )]
+    async fn insights_payment_mix(
+        &self,
+        Parameters(args): Parameters<MultiLocationReportArgs>,
+    ) -> std::result::Result<CallToolResult, McpError> {
+        map_result(
+            self.api
+                .insight_payment_mix(args.start, args.end, args.location)
+                .await,
+        )
+    }
+
+    #[tool(
         name = "skytab.timeclock.shifts",
         description = "List timeclock shifts with pagination aggregation"
     )]
@@ -344,7 +408,7 @@ impl ServerHandler for SkyTabMcpServer {
         ServerInfo::new(ServerCapabilities::builder().enable_tools().build())
             .with_server_info(Implementation::from_build_env())
             .with_instructions(
-                "Read-only SkyTab MCP server exposing auth, locations, reports, timeclock, payments, request.get, and doctor tools.".to_string(),
+                "Read-only SkyTab MCP server exposing auth, locations, reports, insights, timeclock, payments, request.get, and doctor tools.".to_string(),
             )
     }
 }
@@ -455,5 +519,59 @@ mod tests {
             .expect("path type should be present");
 
         assert_eq!(path_type, "string");
+    }
+
+    #[test]
+    fn insights_daily_brief_tool_schema_includes_start_and_end() {
+        let server = SkyTabMcpServer::new(None);
+        let tool = server
+            .tool_router
+            .get("skytab.insights.daily_brief")
+            .expect("insights.daily_brief tool should be registered");
+
+        let start_type = tool
+            .input_schema
+            .get("properties")
+            .and_then(|properties| properties.get("start"))
+            .and_then(|start| start.get("type"))
+            .and_then(Value::as_str)
+            .expect("start type should be present");
+        let end_type = tool
+            .input_schema
+            .get("properties")
+            .and_then(|properties| properties.get("end"))
+            .and_then(|end| end.get("type"))
+            .and_then(Value::as_str)
+            .expect("end type should be present");
+
+        assert_eq!(start_type, "string");
+        assert_eq!(end_type, "string");
+    }
+
+    #[test]
+    fn insights_end_of_day_tool_schema_includes_start_and_end() {
+        let server = SkyTabMcpServer::new(None);
+        let tool = server
+            .tool_router
+            .get("skytab.insights.end_of_day")
+            .expect("insights.end_of_day tool should be registered");
+
+        let start_type = tool
+            .input_schema
+            .get("properties")
+            .and_then(|properties| properties.get("start"))
+            .and_then(|start| start.get("type"))
+            .and_then(Value::as_str)
+            .expect("start type should be present");
+        let end_type = tool
+            .input_schema
+            .get("properties")
+            .and_then(|properties| properties.get("end"))
+            .and_then(|end| end.get("type"))
+            .and_then(Value::as_str)
+            .expect("end type should be present");
+
+        assert_eq!(start_type, "string");
+        assert_eq!(end_type, "string");
     }
 }

@@ -30,6 +30,7 @@ pub enum Commands {
     Locations(LocationsArgs),
     Accounts(AccountsArgs),
     Reports(ReportsArgs),
+    Insights(InsightsArgs),
     Timeclock(TimeclockArgs),
     Payments(PaymentsArgs),
     Request(RequestArgs),
@@ -167,6 +168,40 @@ pub enum ReportsSubcommand {
         location: Vec<i64>,
     },
     Payroll {
+        #[arg(long)]
+        start: String,
+        #[arg(long)]
+        end: String,
+        #[arg(long)]
+        location: Vec<i64>,
+    },
+}
+
+#[derive(Debug, Clone, Args)]
+pub struct InsightsArgs {
+    #[command(subcommand)]
+    pub command: InsightsSubcommand,
+}
+
+#[derive(Debug, Clone, Subcommand)]
+pub enum InsightsSubcommand {
+    DailyBrief {
+        #[arg(long)]
+        start: String,
+        #[arg(long)]
+        end: String,
+        #[arg(long)]
+        location: Vec<i64>,
+    },
+    LaborVsSales {
+        #[arg(long)]
+        start: String,
+        #[arg(long)]
+        end: String,
+        #[arg(long)]
+        location: Vec<i64>,
+    },
+    PaymentMix {
         #[arg(long)]
         start: String,
         #[arg(long)]
@@ -331,6 +366,36 @@ mod tests {
                 assert!(args.allow_write);
             }
             other => panic!("expected request command, got: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parses_insights_daily_brief_subcommand() {
+        let cli = Cli::try_parse_from([
+            "skytab",
+            "insights",
+            "daily-brief",
+            "--start",
+            "2026-03-01",
+            "--end",
+            "2026-03-01",
+        ])
+        .expect("insights daily-brief should parse");
+
+        match cli.command {
+            Commands::Insights(args) => match args.command {
+                InsightsSubcommand::DailyBrief {
+                    start,
+                    end,
+                    location,
+                } => {
+                    assert_eq!(start, "2026-03-01");
+                    assert_eq!(end, "2026-03-01");
+                    assert!(location.is_empty());
+                }
+                other => panic!("expected daily-brief command, got: {other:?}"),
+            },
+            other => panic!("expected insights command, got: {other:?}"),
         }
     }
 }

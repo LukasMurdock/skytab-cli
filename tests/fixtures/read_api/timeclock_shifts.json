@@ -1,0 +1,15 @@
+[
+  {
+    "clockedInAt": "2026-03-01T09:00:00Z",
+    "clockedOutAt": "2026-03-01T17:30:00Z"
+  },
+  {
+    "clockedInAt": "2026-03-01T18:00:00Z",
+    "clockedOutAt": "",
+    "clockedInSeconds": 5400
+  },
+  {
+    "clockedInAt": "2026-03-01T20:00:00Z",
+    "clockedOutAt": "2026-03-01T21:15:00Z"
+  }
+]

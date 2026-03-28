@@ -106,10 +106,10 @@ If your account has exactly one location, the CLI auto-selects it.
 ```bash
 skytab auth login --json
 skytab locations list
-skytab reports hourly-sales --start "2026-03-01" --end "2026-03-01" --format csv --output hourly-sales.csv
+skytab insights daily-brief --start "2026-03-01" --end "2026-03-01"
 ```
 
-This gives you a login check, location discovery, and an exportable report.
+This gives you a login check, location discovery, and an actionable operations summary.
 
 ## MCP Server (Read-Only)
 
@@ -139,6 +139,10 @@ Available tools:
 - `skytab.locations.list`
 - `skytab.locations.show_default`
 - `skytab.accounts.preferences`
+- `skytab.insights.daily_brief`
+- `skytab.insights.end_of_day`
+- `skytab.insights.labor_vs_sales`
+- `skytab.insights.payment_mix`
 - `skytab.reports.activity_summary`
 - `skytab.reports.discount_summary`
 - `skytab.reports.hourly_sales`
@@ -166,6 +170,35 @@ Example Claude Desktop MCP config:
     }
   }
 }
+```
+
+### Task-Oriented MCP Prompt Examples
+
+These prompts help agents use high-value tools first, then drill down only when needed.
+
+```text
+Build my daily operations brief for 2026-03-01. Use skytab.insights.daily_brief.
+Return the top 3 actions based on highlights.
+```
+
+```text
+Compare labor vs sales for 2026-03-01 through 2026-03-07 for locations [43101562, 43101563]
+using skytab.insights.labor_vs_sales. If labor_percent_of_net_sales is above 35,
+call skytab.reports.payroll for the same range and list the highest total pay rows.
+```
+
+```text
+Analyze payment mix for 2026-03-01 with skytab.insights.payment_mix.
+If highlights mention unsettled transactions, call skytab.payments.transactions
+and break down unsettled transactions by status.
+```
+
+```text
+Give me an end-of-day summary for 2026-03-01:
+Use skytab.insights.end_of_day first.
+If I ask follow-ups, then drill into skytab.insights.daily_brief,
+skytab.insights.labor_vs_sales, or skytab.insights.payment_mix.
+Keep it concise and include one follow-up recommendation per insight.
 ```
 
 ## Common Commands
@@ -200,6 +233,14 @@ skytab reports hourly-sales --start "2026-03-01" --end "2026-03-01" --format ndj
 
 Date-only ranges (`YYYY-MM-DD`) are expanded using location timezone boundaries.
 For multi-location calls, all locations must share a timezone when using date-only input.
+
+### Insights
+
+```bash
+skytab insights daily-brief --start "2026-03-01" --end "2026-03-01"
+skytab insights labor-vs-sales --start "2026-03-01" --end "2026-03-01" --json
+skytab insights payment-mix --start "2026-03-01" --end "2026-03-01" --format csv --output payment-mix.csv
+```
 
 ### Timeclock
 
@@ -252,6 +293,9 @@ skytab completion fish > ~/.config/fish/completions/skytab.fish
 - `reports payroll`: `row_type,employee_id,employee_name,...,net_tips`
 - `timeclock shifts`: `shift_guid,employee_name,clocked_in_at,...,location_id`
 - `payments transactions`: `transaction_id,date,type,status,...,raw_json`
+- `insights daily-brief`: `period_start,period_end,location_ids,...,highlights`
+- `insights labor-vs-sales`: `period_start,period_end,location_ids,...,highlights`
+- `insights payment-mix`: `row_type,key,count,amount,...,highlights`
 - Update golden fixtures after schema changes: `./scripts/update-csv-fixtures.sh`
 
 ## Output and Flags

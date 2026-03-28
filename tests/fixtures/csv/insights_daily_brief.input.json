@@ -1,0 +1,21 @@
+{
+  "period_start": "2026-03-01T00:00:00Z",
+  "period_end": "2026-03-01T23:59:59Z",
+  "location_ids": [43101562, 43101563],
+  "gross_sales": 1200.5,
+  "net_sales": 1100.25,
+  "labor_hours": 45.5,
+  "labor_pay": 400.75,
+  "labor_percent_of_net_sales": 36.4244,
+  "sales_per_labor_hour": 24.18,
+  "transaction_count": 80,
+  "settled_count": 76,
+  "settled_amount": 1040.33,
+  "settled_rate_percent": 95.0,
+  "top_payment_type": "SALE",
+  "top_payment_type_amount": 980.22,
+  "highlights": [
+    "Labor is high at 36.4% of net sales.",
+    "Top payment type is SALE at $980.22."
+  ]
+}

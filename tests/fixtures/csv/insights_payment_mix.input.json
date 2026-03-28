@@ -1,0 +1,43 @@
+{
+  "period_start": "2026-03-01T00:00:00Z",
+  "period_end": "2026-03-01T23:59:59Z",
+  "location_ids": [43101562],
+  "transaction_count": 5,
+  "total_amount": 300.0,
+  "highlights": [
+    "SALE leads payment type mix at 93.3% of amount.",
+    "VISA is top tender at 70.0% of amount."
+  ],
+  "by_type": [
+    {
+      "key": "SALE",
+      "count": 4,
+      "amount": 280.0,
+      "share_of_count": 80.0,
+      "share_of_amount": 93.33
+    },
+    {
+      "key": "REFUND",
+      "count": 1,
+      "amount": 20.0,
+      "share_of_count": 20.0,
+      "share_of_amount": 6.67
+    }
+  ],
+  "by_tender": [
+    {
+      "key": "VISA",
+      "count": 3,
+      "amount": 210.0,
+      "share_of_count": 60.0,
+      "share_of_amount": 70.0
+    },
+    {
+      "key": "CASH",
+      "count": 2,
+      "amount": 90.0,
+      "share_of_count": 40.0,
+      "share_of_amount": 30.0
+    }
+  ]
+}

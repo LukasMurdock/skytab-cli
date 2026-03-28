@@ -1,0 +1,5 @@
+row_type,key,count,amount,share_of_count,share_of_amount,period_start,period_end,location_ids,transaction_count,total_amount,highlights
+type,SALE,4,280.0,80.0,93.33,2026-03-01T00:00:00Z,2026-03-01T23:59:59Z,43101562,5,300.0,SALE leads payment type mix at 93.3% of amount. | VISA is top tender at 70.0% of amount.
+type,REFUND,1,20.0,20.0,6.67,2026-03-01T00:00:00Z,2026-03-01T23:59:59Z,43101562,5,300.0,SALE leads payment type mix at 93.3% of amount. | VISA is top tender at 70.0% of amount.
+tender,VISA,3,210.0,60.0,70.0,2026-03-01T00:00:00Z,2026-03-01T23:59:59Z,43101562,5,300.0,SALE leads payment type mix at 93.3% of amount. | VISA is top tender at 70.0% of amount.
+tender,CASH,2,90.0,40.0,30.0,2026-03-01T00:00:00Z,2026-03-01T23:59:59Z,43101562,5,300.0,SALE leads payment type mix at 93.3% of amount. | VISA is top tender at 70.0% of amount.
