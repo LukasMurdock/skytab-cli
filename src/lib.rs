@@ -7,3 +7,4 @@ pub mod logging;
 pub mod mcp_server;
 pub mod output;
 pub mod read_api;
+pub mod update;

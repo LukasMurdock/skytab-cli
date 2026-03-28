@@ -8,7 +8,7 @@ use serde_json::{Value, json};
 use skytab_cli::cli::{
     AccountsSubcommand, AuthSubcommand, Cli, Commands, CompletionShell, DateRangeArgs, HttpMethod,
     InsightsSubcommand, LocationsSubcommand, PaymentsSubcommand, ReportsSubcommand,
-    TimeclockSubcommand,
+    TimeclockSubcommand, UpdateArgs,
 };
 use skytab_cli::client::SkyTabClient;
 use skytab_cli::config::{
@@ -22,6 +22,7 @@ use skytab_cli::read_api::{
     DailyBriefInsight, DoctorReport, LaborVsSalesInsight, PaymentMixBucket, PaymentMixInsight,
     PayrollByEmployeeData, ReadApi, TillTransactionDetailData, parse_query,
 };
+use skytab_cli::update::run_update;
 
 #[tokio::main]
 async fn main() {
@@ -352,6 +353,9 @@ async fn run(cli: Cli) -> Result<()> {
                 print_doctor_report(&report);
             }
         }
+        Commands::Update(args) => {
+            run_update_command(&cli, args).await?;
+        }
     }
 
     Ok(())
@@ -363,6 +367,43 @@ fn print_doctor_report(report: &DoctorReport) {
         let status = if check.ok { "OK" } else { "FAIL" };
         println!("[{status}] {:<22} {}", check.name, check.detail);
     }
+}
+
+async fn run_update_command(cli: &Cli, args: UpdateArgs) -> Result<()> {
+    let report = run_update(args).await?;
+    if wants_structured_output(cli) {
+        emit_value(cli, &serde_json::to_value(report)?)?;
+        return Ok(());
+    }
+
+    if report.check_only {
+        if report.update_available {
+            println!(
+                "Update available: {} -> {} ({})",
+                report.current_version, report.target_version, report.target_triple
+            );
+        } else {
+            println!("Already up to date ({})", report.current_version);
+        }
+        return Ok(());
+    }
+
+    if report.updated {
+        println!(
+            "Updated skytab: {} -> {}",
+            report.current_version, report.target_version
+        );
+        if !report.installed_paths.is_empty() {
+            println!("Installed:");
+            for path in report.installed_paths {
+                println!("- {path}");
+            }
+        }
+    } else {
+        println!("Already up to date ({})", report.current_version);
+    }
+
+    Ok(())
 }
 
 async fn build_client(base_url: Option<String>) -> Result<SkyTabClient> {
