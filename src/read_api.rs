@@ -4,7 +4,8 @@ use reqwest::Method;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
-use std::collections::BTreeSet;
+use std::cmp::Ordering;
+use std::collections::{BTreeMap, BTreeSet};
 
 use crate::cache::TokenCache;
 use crate::client::SkyTabClient;
@@ -178,6 +179,111 @@ pub struct TimeClockShiftsResult {
 pub struct TransactionsResult {
     pub count: usize,
     pub transactions: Vec<Value>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct PaymentMixBucket {
+    pub key: String,
+    pub count: usize,
+    pub amount: f64,
+    pub share_of_count: f64,
+    pub share_of_amount: f64,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct DailyBriefInsight {
+    pub period_start: String,
+    pub period_end: String,
+    pub location_ids: Vec<i64>,
+    pub gross_sales: f64,
+    pub net_sales: f64,
+    pub labor_hours: f64,
+    pub labor_pay: f64,
+    pub labor_percent_of_net_sales: Option<f64>,
+    pub sales_per_labor_hour: Option<f64>,
+    pub transaction_count: usize,
+    pub settled_count: usize,
+    pub settled_amount: f64,
+    pub settled_rate_percent: Option<f64>,
+    pub top_payment_type: Option<String>,
+    pub top_payment_type_amount: Option<f64>,
+    pub highlights: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct LaborVsSalesInsight {
+    pub period_start: String,
+    pub period_end: String,
+    pub location_ids: Vec<i64>,
+    pub gross_sales: f64,
+    pub net_sales: f64,
+    pub labor_hours: f64,
+    pub labor_pay: f64,
+    pub labor_percent_of_net_sales: Option<f64>,
+    pub sales_per_labor_hour: Option<f64>,
+    pub labor_pay_per_labor_hour: Option<f64>,
+    pub employee_count: usize,
+    pub highlights: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct PaymentMixInsight {
+    pub by_type: Vec<PaymentMixBucket>,
+    pub by_tender: Vec<PaymentMixBucket>,
+    pub period_start: String,
+    pub period_end: String,
+    pub location_ids: Vec<i64>,
+    pub transaction_count: usize,
+    pub total_amount: f64,
+    pub highlights: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct EndOfDayInsight {
+    pub daily_brief: DailyBriefInsight,
+    pub labor_vs_sales: LaborVsSalesInsight,
+    pub payment_mix: PaymentMixInsight,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct TimeclockShiftSummary {
+    pub shift_count: usize,
+    pub open_shift_count: usize,
+    pub total_hours: f64,
+}
+
+#[derive(Debug, Clone)]
+struct InsightMetrics {
+    period_start: String,
+    period_end: String,
+    location_ids: Vec<i64>,
+    gross_sales: f64,
+    net_sales: f64,
+    labor_hours: f64,
+    labor_pay: f64,
+    employee_count: usize,
+    transaction_count: usize,
+    settled_count: usize,
+    settled_amount: f64,
+    total_payment_amount: f64,
+    payment_type_mix: Vec<PaymentMixBucket>,
+    payment_tender_mix: Vec<PaymentMixBucket>,
+}
+
+#[derive(Debug, Clone, Default)]
+struct MixAccumulator {
+    count: usize,
+    amount: f64,
+}
+
+#[derive(Debug, Clone)]
+struct PaymentAggregation {
+    transaction_count: usize,
+    settled_count: usize,
+    settled_amount: f64,
+    total_amount: f64,
+    by_type: Vec<PaymentMixBucket>,
+    by_tender: Vec<PaymentMixBucket>,
 }
 
 #[derive(Debug, Clone)]
@@ -396,6 +502,47 @@ impl ReadApi {
         fetch_transactions(&client, start, end, location, order_type).await
     }
 
+    pub async fn insight_daily_brief(
+        &self,
+        start: String,
+        end: String,
+        location: Vec<i64>,
+    ) -> Result<DailyBriefInsight> {
+        let metrics = self.collect_insight_metrics(start, end, location).await?;
+        Ok(build_daily_brief_insight(&metrics))
+    }
+
+    pub async fn insight_labor_vs_sales(
+        &self,
+        start: String,
+        end: String,
+        location: Vec<i64>,
+    ) -> Result<LaborVsSalesInsight> {
+        let metrics = self.collect_insight_metrics(start, end, location).await?;
+        Ok(build_labor_vs_sales_insight(&metrics))
+    }
+
+    pub async fn insight_payment_mix(
+        &self,
+        start: String,
+        end: String,
+        location: Vec<i64>,
+    ) -> Result<PaymentMixInsight> {
+        let metrics = self.collect_insight_metrics(start, end, location).await?;
+        Ok(build_payment_mix_insight(&metrics))
+    }
+
+    pub async fn insight_end_of_day(
+        &self,
+        start: String,
+        end: String,
+        location: Vec<i64>,
+    ) -> Result<EndOfDayInsight> {
+        let metrics = self.collect_insight_metrics(start, end, location).await?;
+
+        Ok(build_end_of_day_insight(&metrics))
+    }
+
     pub async fn request_get(&self, path: String, query: Vec<(String, String)>) -> Result<Value> {
         if !path.starts_with('/') {
             return Err(SkyTabError::InvalidArgument(
@@ -407,6 +554,63 @@ impl ReadApi {
         client
             .request_authed_json(Method::GET, &path, &query, None)
             .await
+    }
+
+    async fn collect_insight_metrics(
+        &self,
+        start: String,
+        end: String,
+        location: Vec<i64>,
+    ) -> Result<InsightMetrics> {
+        let location_ids = self.resolve_locations(location).await?;
+        let client = self.build_client().await?;
+        let (period_start, period_end) =
+            normalize_range_for_locations_timezones(&client, &location_ids, start, end).await?;
+
+        let hourly_sales_future = run_multi_location_report_with_client::<HourlySalesResponse>(
+            &client,
+            "/api/v1/reports/echo-pro/hourly-sales",
+            &period_start,
+            &period_end,
+            &location_ids,
+        );
+        let payroll_future = run_multi_location_report_with_client::<PayrollByEmployeeResponse>(
+            &client,
+            "/api/v1/reports/echo-pro/payroll-by-employee-new",
+            &period_start,
+            &period_end,
+            &location_ids,
+        );
+        let payments_future = fetch_transactions(
+            &client,
+            period_start.clone(),
+            period_end.clone(),
+            location_ids.clone(),
+            None,
+        );
+
+        let (hourly_sales, payroll_response, payments_result) =
+            tokio::try_join!(hourly_sales_future, payroll_future, payments_future)?;
+
+        let payroll_data = transform_payroll_response(payroll_response);
+        let payment_aggregation = summarize_payment_transactions(&payments_result.transactions);
+
+        Ok(InsightMetrics {
+            period_start,
+            period_end,
+            location_ids,
+            gross_sales: sum_hourly_sales_column(&hourly_sales.rows, 2),
+            net_sales: sum_hourly_sales_column(&hourly_sales.rows, 3),
+            labor_hours: payroll_total_hours(&payroll_data),
+            labor_pay: payroll_total_pay(&payroll_data),
+            employee_count: payroll_data.employees.len(),
+            transaction_count: payment_aggregation.transaction_count,
+            settled_count: payment_aggregation.settled_count,
+            settled_amount: payment_aggregation.settled_amount,
+            total_payment_amount: payment_aggregation.total_amount,
+            payment_type_mix: payment_aggregation.by_type,
+            payment_tender_mix: payment_aggregation.by_tender,
+        })
     }
 
     pub async fn doctor_report(&self) -> Result<DoctorReport> {
@@ -646,6 +850,463 @@ impl ReadApi {
             .request_authed_json(Method::POST, endpoint, &[], Some(payload))
             .await
     }
+}
+
+async fn run_multi_location_report_with_client<T>(
+    client: &SkyTabClient,
+    endpoint: &str,
+    start: &str,
+    end: &str,
+    location_ids: &[i64],
+) -> Result<T>
+where
+    T: DeserializeOwned,
+{
+    let payload = build_report_payload(start.to_string(), end.to_string(), location_ids.to_vec());
+    client
+        .request_authed_json(Method::POST, endpoint, &[], Some(payload))
+        .await
+}
+
+fn sum_hourly_sales_column(rows: &[[String; 4]], index: usize) -> f64 {
+    rows.iter()
+        .map(|row| {
+            row.get(index)
+                .map(|value| parse_currency_number(value))
+                .unwrap_or(0.0)
+        })
+        .sum()
+}
+
+fn payroll_total_hours(data: &PayrollByEmployeeData) -> f64 {
+    if let Some(totals) = &data.totals {
+        return totals.normal_hours + totals.overtime_hours + totals.double_overtime_hours;
+    }
+
+    data.employees
+        .iter()
+        .map(|employee| {
+            employee.normal_hours + employee.overtime_hours + employee.double_overtime_hours
+        })
+        .sum()
+}
+
+fn payroll_total_pay(data: &PayrollByEmployeeData) -> f64 {
+    if let Some(totals) = &data.totals {
+        return totals.total_pay;
+    }
+
+    data.employees
+        .iter()
+        .map(|employee| employee.total_pay)
+        .sum()
+}
+
+fn summarize_payment_transactions(transactions: &[Value]) -> PaymentAggregation {
+    let mut transaction_count = 0usize;
+    let mut settled_count = 0usize;
+    let mut settled_amount = 0.0_f64;
+    let mut total_amount = 0.0_f64;
+    let mut by_type = BTreeMap::<String, MixAccumulator>::new();
+    let mut by_tender = BTreeMap::<String, MixAccumulator>::new();
+
+    for transaction in transactions {
+        if !transaction.is_object() {
+            continue;
+        }
+
+        transaction_count += 1;
+
+        let amount = transaction_amount(transaction);
+        total_amount += amount;
+
+        let status = first_string_at_paths(transaction, &["status", "state", "paymentStatus"]);
+        if is_settled_status(status.as_deref()) {
+            settled_count += 1;
+            settled_amount += amount;
+        }
+
+        let type_key = normalize_bucket_key(
+            first_string_at_paths(transaction, &["type", "orderType", "transactionType"])
+                .as_deref(),
+            "UNKNOWN",
+        );
+        bump_mix_bucket(&mut by_type, type_key, amount);
+
+        let tender_key = normalize_bucket_key(
+            first_string_at_paths(
+                transaction,
+                &[
+                    "cardBrand",
+                    "cardType",
+                    "card.brand",
+                    "paymentMethod.cardBrand",
+                    "paymentMethod.cardType",
+                    "paymentMethod.type",
+                    "method",
+                ],
+            )
+            .as_deref(),
+            "UNKNOWN",
+        );
+        bump_mix_bucket(&mut by_tender, tender_key, amount);
+    }
+
+    PaymentAggregation {
+        transaction_count,
+        settled_count,
+        settled_amount,
+        total_amount,
+        by_type: finalize_mix_rows(by_type, transaction_count, total_amount),
+        by_tender: finalize_mix_rows(by_tender, transaction_count, total_amount),
+    }
+}
+
+fn bump_mix_bucket(buckets: &mut BTreeMap<String, MixAccumulator>, key: String, amount: f64) {
+    let entry = buckets.entry(key).or_default();
+    entry.count += 1;
+    entry.amount += amount;
+}
+
+fn finalize_mix_rows(
+    buckets: BTreeMap<String, MixAccumulator>,
+    total_count: usize,
+    total_amount: f64,
+) -> Vec<PaymentMixBucket> {
+    let mut rows = buckets
+        .into_iter()
+        .map(|(key, aggregate)| PaymentMixBucket {
+            key,
+            count: aggregate.count,
+            amount: aggregate.amount,
+            share_of_count: percentage(aggregate.count as f64, total_count as f64).unwrap_or(0.0),
+            share_of_amount: percentage(aggregate.amount, total_amount).unwrap_or(0.0),
+        })
+        .collect::<Vec<_>>();
+
+    rows.sort_by(|left, right| {
+        right
+            .amount
+            .partial_cmp(&left.amount)
+            .unwrap_or(Ordering::Equal)
+            .then_with(|| right.count.cmp(&left.count))
+            .then_with(|| left.key.cmp(&right.key))
+    });
+
+    rows
+}
+
+fn transaction_amount(transaction: &Value) -> f64 {
+    first_number_at_paths(
+        transaction,
+        &[
+            "totalAmount",
+            "totals.total",
+            "amount",
+            "paymentAmount",
+            "netAmount",
+            "totals.amount",
+        ],
+    )
+    .unwrap_or(0.0)
+}
+
+fn normalize_bucket_key(value: Option<&str>, fallback: &str) -> String {
+    match value.map(str::trim) {
+        Some("") | None => fallback.to_string(),
+        Some(value) => value.to_ascii_uppercase(),
+    }
+}
+
+fn is_settled_status(status: Option<&str>) -> bool {
+    let Some(status) = status else {
+        return false;
+    };
+    let normalized = status.trim().to_ascii_uppercase();
+    matches!(
+        normalized.as_str(),
+        "SETTLED" | "CAPTURED" | "SUCCEEDED" | "SUCCESS" | "PAID"
+    )
+}
+
+fn first_string_at_paths(value: &Value, paths: &[&str]) -> Option<String> {
+    for path in paths {
+        if let Some(found) = value_at_path(value, path).and_then(Value::as_str) {
+            let trimmed = found.trim();
+            if !trimmed.is_empty() {
+                return Some(trimmed.to_string());
+            }
+        }
+    }
+    None
+}
+
+fn first_number_at_paths(value: &Value, paths: &[&str]) -> Option<f64> {
+    for path in paths {
+        if let Some(found) = value_at_path(value, path) {
+            if let Some(number) = found.as_f64() {
+                return Some(number);
+            }
+            if let Some(string_value) = found.as_str() {
+                return Some(parse_currency_number(string_value));
+            }
+        }
+    }
+    None
+}
+
+fn value_at_path<'a>(value: &'a Value, path: &str) -> Option<&'a Value> {
+    let mut current = value;
+    for segment in path.split('.') {
+        current = current.get(segment)?;
+    }
+
+    if current.is_null() {
+        return None;
+    }
+
+    Some(current)
+}
+
+fn percentage(numerator: f64, denominator: f64) -> Option<f64> {
+    if denominator.abs() < f64::EPSILON {
+        return None;
+    }
+    Some((numerator / denominator) * 100.0)
+}
+
+fn ratio(numerator: f64, denominator: f64) -> Option<f64> {
+    if denominator.abs() < f64::EPSILON {
+        return None;
+    }
+    Some(numerator / denominator)
+}
+
+fn build_daily_brief_insight(metrics: &InsightMetrics) -> DailyBriefInsight {
+    let highlights = build_daily_brief_highlights(metrics);
+    let top_payment_type = metrics.payment_type_mix.first().cloned();
+
+    DailyBriefInsight {
+        period_start: metrics.period_start.clone(),
+        period_end: metrics.period_end.clone(),
+        location_ids: metrics.location_ids.clone(),
+        gross_sales: metrics.gross_sales,
+        net_sales: metrics.net_sales,
+        labor_hours: metrics.labor_hours,
+        labor_pay: metrics.labor_pay,
+        labor_percent_of_net_sales: percentage(metrics.labor_pay, metrics.net_sales),
+        sales_per_labor_hour: ratio(metrics.net_sales, metrics.labor_hours),
+        transaction_count: metrics.transaction_count,
+        settled_count: metrics.settled_count,
+        settled_amount: metrics.settled_amount,
+        settled_rate_percent: percentage(
+            metrics.settled_count as f64,
+            metrics.transaction_count as f64,
+        ),
+        top_payment_type: top_payment_type.as_ref().map(|item| item.key.clone()),
+        top_payment_type_amount: top_payment_type.map(|item| item.amount),
+        highlights,
+    }
+}
+
+fn build_labor_vs_sales_insight(metrics: &InsightMetrics) -> LaborVsSalesInsight {
+    let highlights = build_labor_vs_sales_highlights(metrics);
+
+    LaborVsSalesInsight {
+        period_start: metrics.period_start.clone(),
+        period_end: metrics.period_end.clone(),
+        location_ids: metrics.location_ids.clone(),
+        gross_sales: metrics.gross_sales,
+        net_sales: metrics.net_sales,
+        labor_hours: metrics.labor_hours,
+        labor_pay: metrics.labor_pay,
+        labor_percent_of_net_sales: percentage(metrics.labor_pay, metrics.net_sales),
+        sales_per_labor_hour: ratio(metrics.net_sales, metrics.labor_hours),
+        labor_pay_per_labor_hour: ratio(metrics.labor_pay, metrics.labor_hours),
+        employee_count: metrics.employee_count,
+        highlights,
+    }
+}
+
+fn build_payment_mix_insight(metrics: &InsightMetrics) -> PaymentMixInsight {
+    let highlights = build_payment_mix_highlights(metrics);
+
+    PaymentMixInsight {
+        by_type: metrics.payment_type_mix.clone(),
+        by_tender: metrics.payment_tender_mix.clone(),
+        period_start: metrics.period_start.clone(),
+        period_end: metrics.period_end.clone(),
+        location_ids: metrics.location_ids.clone(),
+        transaction_count: metrics.transaction_count,
+        total_amount: metrics.total_payment_amount,
+        highlights,
+    }
+}
+
+fn build_end_of_day_insight(metrics: &InsightMetrics) -> EndOfDayInsight {
+    EndOfDayInsight {
+        daily_brief: build_daily_brief_insight(metrics),
+        labor_vs_sales: build_labor_vs_sales_insight(metrics),
+        payment_mix: build_payment_mix_insight(metrics),
+    }
+}
+
+fn build_daily_brief_highlights(metrics: &InsightMetrics) -> Vec<String> {
+    let mut highlights = Vec::new();
+
+    if metrics.net_sales <= 0.0 {
+        highlights.push("No net sales recorded for the selected range.".to_string());
+    }
+
+    if let Some(labor_pct) = percentage(metrics.labor_pay, metrics.net_sales) {
+        if labor_pct >= 35.0 {
+            highlights.push(format!("Labor is high at {:.1}% of net sales.", labor_pct));
+        }
+    }
+
+    if metrics.transaction_count == 0 {
+        highlights.push("No payment transactions were found.".to_string());
+    } else if let Some(settled_rate) = percentage(
+        metrics.settled_count as f64,
+        metrics.transaction_count as f64,
+    ) {
+        if settled_rate < 95.0 {
+            highlights.push(format!(
+                "Settlement rate is {:.1}% ({} of {}).",
+                settled_rate, metrics.settled_count, metrics.transaction_count
+            ));
+        }
+    }
+
+    if let Some(top_type) = metrics.payment_type_mix.first() {
+        highlights.push(format!(
+            "Top payment type is {} at ${:.2}.",
+            top_type.key, top_type.amount
+        ));
+    }
+
+    if highlights.is_empty() {
+        highlights.push("No issues detected in this range.".to_string());
+    }
+
+    highlights
+}
+
+fn build_labor_vs_sales_highlights(metrics: &InsightMetrics) -> Vec<String> {
+    let mut highlights = Vec::new();
+
+    if metrics.labor_hours <= 0.0 {
+        highlights.push("No labor hours found in payroll data.".to_string());
+    }
+
+    if let Some(labor_pct) = percentage(metrics.labor_pay, metrics.net_sales) {
+        if labor_pct >= 35.0 {
+            highlights.push(format!("Labor is high at {:.1}% of net sales.", labor_pct));
+        } else if labor_pct <= 20.0 {
+            highlights.push(format!("Labor is lean at {:.1}% of net sales.", labor_pct));
+        }
+    }
+
+    if let Some(sales_per_hour) = ratio(metrics.net_sales, metrics.labor_hours) {
+        highlights.push(format!(
+            "Net sales per labor hour is ${:.2}.",
+            sales_per_hour
+        ));
+    }
+
+    if highlights.is_empty() {
+        highlights.push("Labor and sales trends look stable.".to_string());
+    }
+
+    highlights
+}
+
+fn build_payment_mix_highlights(metrics: &InsightMetrics) -> Vec<String> {
+    let mut highlights = Vec::new();
+
+    if metrics.transaction_count == 0 {
+        highlights.push("No payment transactions were found.".to_string());
+        return highlights;
+    }
+
+    if let Some(top_type) = metrics.payment_type_mix.first() {
+        highlights.push(format!(
+            "{} leads payment type mix at {:.1}% of amount.",
+            top_type.key, top_type.share_of_amount
+        ));
+    }
+
+    if let Some(top_tender) = metrics.payment_tender_mix.first() {
+        highlights.push(format!(
+            "{} is the top tender at {:.1}% of amount.",
+            top_tender.key, top_tender.share_of_amount
+        ));
+    }
+
+    let unsettled_count = metrics
+        .transaction_count
+        .saturating_sub(metrics.settled_count);
+    if unsettled_count > 0 {
+        highlights.push(format!(
+            "{} transactions are not settled yet.",
+            unsettled_count
+        ));
+    }
+
+    highlights
+}
+
+pub fn summarize_timeclock_shifts(shifts: &[Value]) -> TimeclockShiftSummary {
+    let mut open_shift_count = 0usize;
+    let mut total_hours = 0.0_f64;
+
+    for shift in shifts {
+        let clocked_out = shift
+            .get("clockedOutAt")
+            .and_then(Value::as_str)
+            .unwrap_or("")
+            .trim();
+        if clocked_out.is_empty() {
+            open_shift_count += 1;
+        }
+
+        if let Some(hours) = timeclock_shift_hours(shift) {
+            total_hours += hours;
+        }
+    }
+
+    TimeclockShiftSummary {
+        shift_count: shifts.len(),
+        open_shift_count,
+        total_hours,
+    }
+}
+
+fn timeclock_shift_hours(shift: &Value) -> Option<f64> {
+    let clocked_in = shift
+        .get("clockedInAt")
+        .and_then(Value::as_str)
+        .unwrap_or("")
+        .trim();
+    let clocked_out = shift
+        .get("clockedOutAt")
+        .and_then(Value::as_str)
+        .unwrap_or("")
+        .trim();
+
+    if !clocked_in.is_empty() && !clocked_out.is_empty() {
+        let start = chrono::DateTime::parse_from_rfc3339(clocked_in).ok()?;
+        let end = chrono::DateTime::parse_from_rfc3339(clocked_out).ok()?;
+        let seconds = (end - start).num_seconds();
+        if seconds > 0 {
+            return Some(seconds as f64 / 3600.0);
+        }
+    }
+
+    shift
+        .get("clockedInSeconds")
+        .and_then(Value::as_f64)
+        .map(|seconds| seconds / 3600.0)
 }
 
 pub fn parse_query(parts: &[String]) -> Result<Vec<(String, String)>> {
@@ -1034,8 +1695,26 @@ fn parse_number(input: &str) -> f64 {
 }
 
 fn parse_currency_number(input: &str) -> f64 {
-    let normalized = input.replace(['$', ','], "");
-    normalized.parse::<f64>().unwrap_or(0.0)
+    let trimmed = input.trim();
+    if trimmed.is_empty() {
+        return 0.0;
+    }
+
+    let wrapped_negative = trimmed.starts_with('(') && trimmed.ends_with(')');
+    let inner = if wrapped_negative {
+        &trimmed[1..trimmed.len() - 1]
+    } else {
+        trimmed
+    };
+
+    let normalized = inner.replace(['$', ','], "");
+    let parsed = normalized.parse::<f64>().unwrap_or(0.0);
+
+    if wrapped_negative {
+        -parsed.abs()
+    } else {
+        parsed
+    }
 }
 
 fn redact_username(username: &str) -> String {
@@ -1054,6 +1733,60 @@ fn redact_username(username: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde_json::json;
+    use std::{fs, path::PathBuf};
+
+    fn fixture_path(name: &str) -> PathBuf {
+        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("tests")
+            .join("fixtures")
+            .join("read_api")
+            .join(name)
+    }
+
+    fn read_fixture(name: &str) -> String {
+        let path = fixture_path(name);
+        fs::read_to_string(&path)
+            .unwrap_or_else(|err| panic!("failed reading fixture {}: {err}", path.display()))
+    }
+
+    fn assert_close(actual: f64, expected: f64) {
+        assert!(
+            (actual - expected).abs() < 1e-9,
+            "expected {expected}, got {actual}"
+        );
+    }
+
+    fn sample_insight_metrics() -> InsightMetrics {
+        InsightMetrics {
+            period_start: "2026-03-01T00:00:00Z".to_string(),
+            period_end: "2026-03-01T23:59:59Z".to_string(),
+            location_ids: vec![43101562, 43101563],
+            gross_sales: 1200.0,
+            net_sales: 1100.0,
+            labor_hours: 44.0,
+            labor_pay: 400.0,
+            employee_count: 9,
+            transaction_count: 80,
+            settled_count: 75,
+            settled_amount: 980.0,
+            total_payment_amount: 1040.0,
+            payment_type_mix: vec![PaymentMixBucket {
+                key: "SALE".to_string(),
+                count: 70,
+                amount: 980.0,
+                share_of_count: 87.5,
+                share_of_amount: 94.2307,
+            }],
+            payment_tender_mix: vec![PaymentMixBucket {
+                key: "VISA".to_string(),
+                count: 60,
+                amount: 800.0,
+                share_of_count: 75.0,
+                share_of_amount: 76.923,
+            }],
+        }
+    }
 
     #[test]
     fn parse_query_accepts_key_value_pairs() {
@@ -1085,6 +1818,113 @@ mod tests {
         assert!(is_date_only("2026-03-28"));
         assert!(!is_date_only("2026-03-28T00:00:00Z"));
         assert!(!is_date_only("20260328"));
+    }
+
+    #[test]
+    fn payroll_transform_parses_fixture_rows() {
+        let fixture = read_fixture("payroll_report_response.json");
+        let response: PayrollByEmployeeResponse =
+            serde_json::from_str(&fixture).expect("fixture should parse");
+
+        let transformed = transform_payroll_response(response);
+
+        assert_eq!(transformed.employees.len(), 1);
+        assert_eq!(transformed.employees[0].employee_id, "100");
+        assert_eq!(transformed.employees[0].employee_name, "Alice Smith");
+        assert_close(transformed.employees[0].total_pay, 157.75);
+
+        let totals = transformed.totals.expect("totals row should be detected");
+        assert_eq!(totals.employee_id, "TOTAL");
+        assert_close(totals.normal_hours, 8.0);
+        assert_close(totals.overtime_hours, 1.0);
+        assert_close(totals.total_pay, 157.75);
+    }
+
+    #[test]
+    fn till_transform_parses_fixture_rows() {
+        let fixture = read_fixture("till_transaction_report_response.json");
+        let response: TillTransactionDetailResponse =
+            serde_json::from_str(&fixture).expect("fixture should parse");
+
+        let transformed = transform_till_transaction_response(response);
+
+        assert_eq!(transformed.items.len(), 2);
+        assert_eq!(transformed.items[0].employee_name, "Alice Smith");
+        assert_close(transformed.items[0].amount, 50.0);
+        assert_eq!(transformed.items[1].employee_name, "Bob Stone");
+        assert_close(transformed.items[1].amount, -10.5);
+    }
+
+    #[test]
+    fn timeclock_summary_aggregates_fixture_rows() {
+        let fixture = read_fixture("timeclock_shifts.json");
+        let shifts: Vec<Value> = serde_json::from_str(&fixture).expect("fixture should parse");
+
+        let summary = summarize_timeclock_shifts(&shifts);
+
+        assert_eq!(summary.shift_count, 3);
+        assert_eq!(summary.open_shift_count, 1);
+        assert_close(summary.total_hours, 11.25);
+    }
+
+    #[test]
+    fn parse_currency_number_supports_negative_parentheses() {
+        assert_close(parse_currency_number("($12.34)"), -12.34);
+        assert_close(parse_currency_number("$1,234.50"), 1234.50);
+    }
+
+    #[test]
+    fn payment_transaction_summary_builds_mix_rows() {
+        let transactions = vec![
+            json!({
+                "type": "SALE",
+                "status": "SETTLED",
+                "totalAmount": "10.00",
+                "paymentMethod": { "cardBrand": "VISA" }
+            }),
+            json!({
+                "type": "SALE",
+                "status": "SETTLED",
+                "totalAmount": "5.00",
+                "paymentMethod": { "cardBrand": "VISA" }
+            }),
+            json!({
+                "type": "REFUND",
+                "status": "PENDING",
+                "totalAmount": "2.00",
+                "paymentMethod": { "cardBrand": "MASTERCARD" }
+            }),
+        ];
+
+        let summary = summarize_payment_transactions(&transactions);
+
+        assert_eq!(summary.transaction_count, 3);
+        assert_eq!(summary.settled_count, 2);
+        assert_close(summary.settled_amount, 15.0);
+        assert_close(summary.total_amount, 17.0);
+
+        assert_eq!(summary.by_type.len(), 2);
+        assert_eq!(summary.by_type[0].key, "SALE");
+        assert_eq!(summary.by_type[0].count, 2);
+        assert_close(summary.by_type[0].amount, 15.0);
+
+        assert_eq!(summary.by_tender.len(), 2);
+        assert_eq!(summary.by_tender[0].key, "VISA");
+        assert_eq!(summary.by_tender[0].count, 2);
+        assert_close(summary.by_tender[0].amount, 15.0);
+    }
+
+    #[test]
+    fn end_of_day_insight_contains_all_three_views() {
+        let metrics = sample_insight_metrics();
+
+        let insight = build_end_of_day_insight(&metrics);
+
+        assert_close(insight.daily_brief.net_sales, 1100.0);
+        assert_eq!(insight.labor_vs_sales.employee_count, 9);
+        assert_eq!(insight.payment_mix.transaction_count, 80);
+        assert_eq!(insight.payment_mix.by_type[0].key, "SALE");
+        assert_eq!(insight.daily_brief.location_ids, vec![43101562, 43101563]);
     }
 
     #[tokio::test]

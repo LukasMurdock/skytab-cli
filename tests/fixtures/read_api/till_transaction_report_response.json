@@ -1,0 +1,9 @@
+{
+  "name": "Till Transaction Detail",
+  "headers": ["Till", "Date/Time", "Employee", "Action", "Amount"],
+  "rows": [
+    ["Front Till", "2026-03-01 09:00", "Alice Smith", "PAID IN", "$50.00"],
+    ["Front Till", "2026-03-01 10:00", "Bob Stone", "PAID OUT", "($10.50)"],
+    ["invalid"]
+  ]
+}

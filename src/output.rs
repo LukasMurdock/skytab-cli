@@ -12,6 +12,9 @@ pub enum CsvSchema {
     Payroll,
     TimeclockShifts,
     PaymentsTransactions,
+    InsightsDailyBrief,
+    InsightsLaborVsSales,
+    InsightsPaymentMix,
 }
 
 const PREFERRED_ARRAY_KEYS: &[&str] = &[
@@ -86,6 +89,9 @@ fn render_csv_with_schema(value: &Value, schema: CsvSchema) -> String {
         CsvSchema::Payroll => render_payroll_csv(value),
         CsvSchema::TimeclockShifts => render_timeclock_shifts_csv(value),
         CsvSchema::PaymentsTransactions => render_payments_transactions_csv(value),
+        CsvSchema::InsightsDailyBrief => render_insights_daily_brief_csv(value),
+        CsvSchema::InsightsLaborVsSales => render_insights_labor_vs_sales_csv(value),
+        CsvSchema::InsightsPaymentMix => render_insights_payment_mix_csv(value),
     }
 }
 
@@ -360,6 +366,180 @@ fn render_payments_transactions_csv(value: &Value) -> String {
         ],
         rows,
     )
+}
+
+fn render_insights_daily_brief_csv(value: &Value) -> String {
+    let row = vec![
+        cell_from_paths(value, &["period_start"]),
+        cell_from_paths(value, &["period_end"]),
+        join_numeric_array(value.get("location_ids")),
+        cell_from_paths(value, &["gross_sales"]),
+        cell_from_paths(value, &["net_sales"]),
+        cell_from_paths(value, &["labor_hours"]),
+        cell_from_paths(value, &["labor_pay"]),
+        cell_from_paths(value, &["labor_percent_of_net_sales"]),
+        cell_from_paths(value, &["sales_per_labor_hour"]),
+        cell_from_paths(value, &["transaction_count"]),
+        cell_from_paths(value, &["settled_count"]),
+        cell_from_paths(value, &["settled_amount"]),
+        cell_from_paths(value, &["settled_rate_percent"]),
+        cell_from_paths(value, &["top_payment_type"]),
+        cell_from_paths(value, &["top_payment_type_amount"]),
+        join_string_array(value.get("highlights")),
+    ];
+
+    render_records_csv(
+        &[
+            "period_start",
+            "period_end",
+            "location_ids",
+            "gross_sales",
+            "net_sales",
+            "labor_hours",
+            "labor_pay",
+            "labor_percent_of_net_sales",
+            "sales_per_labor_hour",
+            "transaction_count",
+            "settled_count",
+            "settled_amount",
+            "settled_rate_percent",
+            "top_payment_type",
+            "top_payment_type_amount",
+            "highlights",
+        ],
+        vec![row],
+    )
+}
+
+fn render_insights_labor_vs_sales_csv(value: &Value) -> String {
+    let row = vec![
+        cell_from_paths(value, &["period_start"]),
+        cell_from_paths(value, &["period_end"]),
+        join_numeric_array(value.get("location_ids")),
+        cell_from_paths(value, &["gross_sales"]),
+        cell_from_paths(value, &["net_sales"]),
+        cell_from_paths(value, &["labor_hours"]),
+        cell_from_paths(value, &["labor_pay"]),
+        cell_from_paths(value, &["labor_percent_of_net_sales"]),
+        cell_from_paths(value, &["sales_per_labor_hour"]),
+        cell_from_paths(value, &["labor_pay_per_labor_hour"]),
+        cell_from_paths(value, &["employee_count"]),
+        join_string_array(value.get("highlights")),
+    ];
+
+    render_records_csv(
+        &[
+            "period_start",
+            "period_end",
+            "location_ids",
+            "gross_sales",
+            "net_sales",
+            "labor_hours",
+            "labor_pay",
+            "labor_percent_of_net_sales",
+            "sales_per_labor_hour",
+            "labor_pay_per_labor_hour",
+            "employee_count",
+            "highlights",
+        ],
+        vec![row],
+    )
+}
+
+fn render_insights_payment_mix_csv(value: &Value) -> String {
+    let period_start = cell_from_paths(value, &["period_start"]);
+    let period_end = cell_from_paths(value, &["period_end"]);
+    let location_ids = join_numeric_array(value.get("location_ids"));
+    let transaction_count = cell_from_paths(value, &["transaction_count"]);
+    let total_amount = cell_from_paths(value, &["total_amount"]);
+    let highlights = join_string_array(value.get("highlights"));
+
+    let mut rows = Vec::new();
+
+    for (row_type, key) in [("type", "by_type"), ("tender", "by_tender")] {
+        if let Some(items) = value.get(key).and_then(Value::as_array) {
+            for item in items {
+                rows.push(vec![
+                    row_type.to_string(),
+                    cell_from_paths(item, &["key"]),
+                    cell_from_paths(item, &["count"]),
+                    cell_from_paths(item, &["amount"]),
+                    cell_from_paths(item, &["share_of_count"]),
+                    cell_from_paths(item, &["share_of_amount"]),
+                    period_start.clone(),
+                    period_end.clone(),
+                    location_ids.clone(),
+                    transaction_count.clone(),
+                    total_amount.clone(),
+                    highlights.clone(),
+                ]);
+            }
+        }
+    }
+
+    if rows.is_empty() {
+        rows.push(vec![
+            "summary".to_string(),
+            String::new(),
+            String::new(),
+            String::new(),
+            String::new(),
+            String::new(),
+            period_start,
+            period_end,
+            location_ids,
+            transaction_count,
+            total_amount,
+            highlights,
+        ]);
+    }
+
+    render_records_csv(
+        &[
+            "row_type",
+            "key",
+            "count",
+            "amount",
+            "share_of_count",
+            "share_of_amount",
+            "period_start",
+            "period_end",
+            "location_ids",
+            "transaction_count",
+            "total_amount",
+            "highlights",
+        ],
+        rows,
+    )
+}
+
+fn join_numeric_array(value: Option<&Value>) -> String {
+    value
+        .and_then(Value::as_array)
+        .map(|items| {
+            items
+                .iter()
+                .filter_map(Value::as_i64)
+                .map(|number| number.to_string())
+                .collect::<Vec<_>>()
+                .join("|")
+        })
+        .unwrap_or_default()
+}
+
+fn join_string_array(value: Option<&Value>) -> String {
+    value
+        .and_then(Value::as_array)
+        .map(|items| {
+            items
+                .iter()
+                .filter_map(Value::as_str)
+                .map(str::trim)
+                .filter(|item| !item.is_empty())
+                .collect::<Vec<_>>()
+                .join(" | ")
+        })
+        .unwrap_or_default()
 }
 
 fn value_at_path<'a>(value: &'a Value, path: &str) -> Option<&'a Value> {
@@ -775,5 +955,119 @@ mod tests {
             "transaction_id,date,type,status,amount,tip_amount,tax_amount,total_amount,currency,location_id,order_id,reference,card_brand,card_last4,raw_json"
         );
         assert!(lines[1].starts_with("txn_1,2026-03-01T00:00:00Z,SALE,SETTLED,12.34"));
+    }
+
+    #[test]
+    fn insights_daily_brief_schema_has_fixed_columns() {
+        let wrapped = json!({
+            "period_start": "2026-03-01T00:00:00Z",
+            "period_end": "2026-03-01T23:59:59Z",
+            "location_ids": [43101562],
+            "gross_sales": 1200.0,
+            "net_sales": 1100.0,
+            "labor_hours": 45.5,
+            "labor_pay": 400.0,
+            "labor_percent_of_net_sales": 36.36,
+            "sales_per_labor_hour": 24.17,
+            "transaction_count": 80,
+            "settled_count": 76,
+            "settled_amount": 1040.0,
+            "settled_rate_percent": 95.0,
+            "top_payment_type": "SALE",
+            "top_payment_type_amount": 990.0,
+            "highlights": ["Labor is high", "Settlement rate dipped"]
+        });
+
+        let rendered = render_structured_value_with_schema(
+            &wrapped,
+            OutputFormat::Csv,
+            Some(CsvSchema::InsightsDailyBrief),
+        )
+        .expect("insights daily brief csv should render");
+        let lines = rendered.lines().collect::<Vec<_>>();
+
+        assert_eq!(
+            lines[0],
+            "period_start,period_end,location_ids,gross_sales,net_sales,labor_hours,labor_pay,labor_percent_of_net_sales,sales_per_labor_hour,transaction_count,settled_count,settled_amount,settled_rate_percent,top_payment_type,top_payment_type_amount,highlights"
+        );
+        assert!(lines[1].contains("43101562"));
+        assert!(lines[1].contains("Labor is high | Settlement rate dipped"));
+    }
+
+    #[test]
+    fn insights_labor_vs_sales_schema_has_fixed_columns() {
+        let wrapped = json!({
+            "period_start": "2026-03-01T00:00:00Z",
+            "period_end": "2026-03-01T23:59:59Z",
+            "location_ids": [43101562, 43101563],
+            "gross_sales": 2200.0,
+            "net_sales": 2100.0,
+            "labor_hours": 85.0,
+            "labor_pay": 750.0,
+            "labor_percent_of_net_sales": 35.71,
+            "sales_per_labor_hour": 24.71,
+            "labor_pay_per_labor_hour": 8.82,
+            "employee_count": 11,
+            "highlights": ["Labor is high"]
+        });
+
+        let rendered = render_structured_value_with_schema(
+            &wrapped,
+            OutputFormat::Csv,
+            Some(CsvSchema::InsightsLaborVsSales),
+        )
+        .expect("insights labor vs sales csv should render");
+        let lines = rendered.lines().collect::<Vec<_>>();
+
+        assert_eq!(
+            lines[0],
+            "period_start,period_end,location_ids,gross_sales,net_sales,labor_hours,labor_pay,labor_percent_of_net_sales,sales_per_labor_hour,labor_pay_per_labor_hour,employee_count,highlights"
+        );
+        assert!(lines[1].contains("43101562|43101563"));
+    }
+
+    #[test]
+    fn insights_payment_mix_schema_has_fixed_columns() {
+        let wrapped = json!({
+            "period_start": "2026-03-01T00:00:00Z",
+            "period_end": "2026-03-01T23:59:59Z",
+            "location_ids": [43101562],
+            "transaction_count": 5,
+            "total_amount": 300.0,
+            "highlights": ["SALE leads"],
+            "by_type": [
+                {
+                    "key": "SALE",
+                    "count": 4,
+                    "amount": 280.0,
+                    "share_of_count": 80.0,
+                    "share_of_amount": 93.33
+                }
+            ],
+            "by_tender": [
+                {
+                    "key": "VISA",
+                    "count": 3,
+                    "amount": 210.0,
+                    "share_of_count": 60.0,
+                    "share_of_amount": 70.0
+                }
+            ]
+        });
+
+        let rendered = render_structured_value_with_schema(
+            &wrapped,
+            OutputFormat::Csv,
+            Some(CsvSchema::InsightsPaymentMix),
+        )
+        .expect("insights payment mix csv should render");
+        let lines = rendered.lines().collect::<Vec<_>>();
+
+        assert_eq!(
+            lines[0],
+            "row_type,key,count,amount,share_of_count,share_of_amount,period_start,period_end,location_ids,transaction_count,total_amount,highlights"
+        );
+        assert!(lines[1].starts_with("type,SALE,4,280.0,80.0,93.33"));
+        assert!(lines[2].starts_with("tender,VISA,3,210.0,60.0,70.0"));
     }
 }

@@ -1,0 +1,2 @@
+period_start,period_end,location_ids,gross_sales,net_sales,labor_hours,labor_pay,labor_percent_of_net_sales,sales_per_labor_hour,labor_pay_per_labor_hour,employee_count,highlights
+2026-03-01T00:00:00Z,2026-03-01T23:59:59Z,43101562,2200.0,2100.0,85.0,750.0,35.714285,24.705882,8.823529,11,Labor is high at 35.7% of net sales. | Net sales per labor hour is $24.71.

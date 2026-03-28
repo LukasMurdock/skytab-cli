@@ -17,7 +17,6 @@ This plan focuses on increasing project value, not just adding endpoints.
   - touch points: `src/cli.rs`, `src/main.rs`
 - Improve first-run onboarding in `README.md`:
   - install -> auth -> first report -> MCP in one quick path
-- Add easier install channel (Homebrew tap) while keeping `install.sh` fallback.
 - Add shell completions (`bash`, `zsh`, `fish`) for discoverability.
 - Success metric: new user reaches first useful result in less than 5 minutes.
 

@@ -1,0 +1,17 @@
+{
+  "period_start": "2026-03-01T00:00:00Z",
+  "period_end": "2026-03-01T23:59:59Z",
+  "location_ids": [43101562],
+  "gross_sales": 2200.0,
+  "net_sales": 2100.0,
+  "labor_hours": 85.0,
+  "labor_pay": 750.0,
+  "labor_percent_of_net_sales": 35.714285,
+  "sales_per_labor_hour": 24.705882,
+  "labor_pay_per_labor_hour": 8.823529,
+  "employee_count": 11,
+  "highlights": [
+    "Labor is high at 35.7% of net sales.",
+    "Net sales per labor hour is $24.71."
+  ]
+}

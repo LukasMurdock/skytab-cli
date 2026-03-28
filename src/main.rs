@@ -7,7 +7,8 @@ use serde_json::{Value, json};
 
 use skytab_cli::cli::{
     AccountsSubcommand, AuthSubcommand, Cli, Commands, CompletionShell, HttpMethod,
-    LocationsSubcommand, PaymentsSubcommand, ReportsSubcommand, TimeclockSubcommand,
+    InsightsSubcommand, LocationsSubcommand, PaymentsSubcommand, ReportsSubcommand,
+    TimeclockSubcommand,
 };
 use skytab_cli::client::SkyTabClient;
 use skytab_cli::config::{
@@ -17,7 +18,8 @@ use skytab_cli::error::{Result, SkyTabError};
 use skytab_cli::logging::init_tracing;
 use skytab_cli::output;
 use skytab_cli::read_api::{
-    DoctorReport, PayrollByEmployeeData, ReadApi, TillTransactionDetailData, parse_query,
+    DailyBriefInsight, DoctorReport, LaborVsSalesInsight, PaymentMixBucket, PaymentMixInsight,
+    PayrollByEmployeeData, ReadApi, TillTransactionDetailData, parse_query,
 };
 
 #[tokio::main]
@@ -239,6 +241,61 @@ async fn run(cli: Cli) -> Result<()> {
                     )?;
                 } else {
                     print_payroll_human(&response);
+                }
+            }
+        },
+        Commands::Insights(args) => match args.command {
+            InsightsSubcommand::DailyBrief {
+                start,
+                end,
+                location,
+            } => {
+                let response = read_api.insight_daily_brief(start, end, location).await?;
+
+                if wants_structured_output(&cli) {
+                    emit_value_with_schema(
+                        &cli,
+                        &serde_json::to_value(response)?,
+                        Some(output::CsvSchema::InsightsDailyBrief),
+                    )?;
+                } else {
+                    print_daily_brief_human(&response);
+                }
+            }
+            InsightsSubcommand::LaborVsSales {
+                start,
+                end,
+                location,
+            } => {
+                let response = read_api
+                    .insight_labor_vs_sales(start, end, location)
+                    .await?;
+
+                if wants_structured_output(&cli) {
+                    emit_value_with_schema(
+                        &cli,
+                        &serde_json::to_value(response)?,
+                        Some(output::CsvSchema::InsightsLaborVsSales),
+                    )?;
+                } else {
+                    print_labor_vs_sales_human(&response);
+                }
+            }
+            InsightsSubcommand::PaymentMix {
+                start,
+                end,
+                location,
+            } => {
+                let response = read_api.insight_payment_mix(start, end, location).await?;
+
+                if wants_structured_output(&cli) {
+                    emit_value_with_schema(
+                        &cli,
+                        &serde_json::to_value(response)?,
+                        Some(output::CsvSchema::InsightsPaymentMix),
+                    )?;
+                } else {
+                    print_payment_mix_human(&response);
                 }
             }
         },
@@ -570,6 +627,155 @@ fn print_payroll_human(data: &PayrollByEmployeeData) {
 
     println!();
     println!("Employees: {}", data.employees.len());
+}
+
+fn print_daily_brief_human(data: &DailyBriefInsight) {
+    println!("DAILY BRIEF");
+    println!(
+        "Range: {} -> {} | Locations: {}",
+        data.period_start,
+        data.period_end,
+        format_location_ids(&data.location_ids)
+    );
+    println!();
+    println!(
+        "Sales: Gross ${:.2} | Net ${:.2}",
+        data.gross_sales, data.net_sales
+    );
+    println!(
+        "Labor: Hours {:.2} | Pay ${:.2} | Labor % of Net {} | Sales/Labor Hr {}",
+        data.labor_hours,
+        data.labor_pay,
+        format_optional_percent(data.labor_percent_of_net_sales),
+        format_optional_currency(data.sales_per_labor_hour)
+    );
+    println!(
+        "Payments: Tx {} | Settled {} ({}) | Settled Amount ${:.2}",
+        data.transaction_count,
+        data.settled_count,
+        format_optional_percent(data.settled_rate_percent),
+        data.settled_amount
+    );
+
+    if let Some(top_type) = &data.top_payment_type {
+        println!(
+            "Top payment type: {} (${:.2})",
+            top_type,
+            data.top_payment_type_amount.unwrap_or(0.0)
+        );
+    }
+
+    println!();
+    println!("Highlights:");
+    for highlight in &data.highlights {
+        println!("- {highlight}");
+    }
+}
+
+fn print_labor_vs_sales_human(data: &LaborVsSalesInsight) {
+    println!("LABOR VS SALES");
+    println!(
+        "Range: {} -> {} | Locations: {}",
+        data.period_start,
+        data.period_end,
+        format_location_ids(&data.location_ids)
+    );
+    println!();
+    println!(
+        "Net sales ${:.2} | Gross sales ${:.2}",
+        data.net_sales, data.gross_sales
+    );
+    println!(
+        "Labor pay ${:.2} | Labor hours {:.2} | Employees {}",
+        data.labor_pay, data.labor_hours, data.employee_count
+    );
+    println!(
+        "Labor % of net {} | Sales per labor hour {} | Labor pay per labor hour {}",
+        format_optional_percent(data.labor_percent_of_net_sales),
+        format_optional_currency(data.sales_per_labor_hour),
+        format_optional_currency(data.labor_pay_per_labor_hour)
+    );
+
+    println!();
+    println!("Highlights:");
+    for highlight in &data.highlights {
+        println!("- {highlight}");
+    }
+}
+
+fn print_payment_mix_human(data: &PaymentMixInsight) {
+    println!("PAYMENT MIX");
+    println!(
+        "Range: {} -> {} | Locations: {}",
+        data.period_start,
+        data.period_end,
+        format_location_ids(&data.location_ids)
+    );
+    println!(
+        "Transactions: {} | Total amount: ${:.2}",
+        data.transaction_count, data.total_amount
+    );
+    println!();
+
+    print_payment_mix_section("By Type", &data.by_type, 8);
+    println!();
+    print_payment_mix_section("By Tender", &data.by_tender, 8);
+
+    if !data.highlights.is_empty() {
+        println!();
+        println!("Highlights:");
+        for highlight in &data.highlights {
+            println!("- {highlight}");
+        }
+    }
+}
+
+fn print_payment_mix_section(title: &str, rows: &[PaymentMixBucket], limit: usize) {
+    println!("{title}");
+    println!(
+        "{:<16} {:>8} {:>12} {:>10}",
+        "KEY", "COUNT", "AMOUNT", "AMOUNT%"
+    );
+    println!("{:-<16} {:-<8} {:-<12} {:-<10}", "", "", "", "");
+
+    if rows.is_empty() {
+        println!("{:<16} {:>8} {:>12} {:>10}", "-", 0, "0.00", "0.0%");
+        return;
+    }
+
+    for row in rows.iter().take(limit) {
+        println!(
+            "{:<16} {:>8} {:>12.2} {:>9.1}%",
+            truncate_to(row.key.as_str(), 16),
+            row.count,
+            row.amount,
+            row.share_of_amount
+        );
+    }
+}
+
+fn format_location_ids(location_ids: &[i64]) -> String {
+    if location_ids.is_empty() {
+        return "-".to_string();
+    }
+
+    location_ids
+        .iter()
+        .map(std::string::ToString::to_string)
+        .collect::<Vec<_>>()
+        .join(",")
+}
+
+fn format_optional_percent(value: Option<f64>) -> String {
+    value
+        .map(|value| format!("{value:.1}%"))
+        .unwrap_or_else(|| "-".to_string())
+}
+
+fn format_optional_currency(value: Option<f64>) -> String {
+    value
+        .map(|value| format!("${value:.2}"))
+        .unwrap_or_else(|| "-".to_string())
 }
 
 fn truncate_to(input: &str, max_width: usize) -> String {
