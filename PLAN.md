@@ -56,3 +56,38 @@ This plan focuses on increasing project value, not just adding endpoints.
 3. MCP-first: prioritize composite MCP tools immediately.
 
 Default priority is Option 1.
+
+## Current Workstream: Lazy Keychain Access (In Progress)
+
+Goal: remove repeated keychain prompts during normal CLI/MCP usage while preserving secure credential behavior when auth is actually required.
+
+### Product decisions (locked)
+
+- Use token-first auth flow for both `skytab` and `skytab-mcp`.
+- Allow command execution from a valid cached token even when keychain/credentials are currently unavailable.
+- Keep `skytab auth login` as force-refresh so it remains an explicit auth check.
+- Keep `skytab doctor` as deep diagnostics (it may still touch keychain).
+- In `SKYTAB_CREDENTIAL_STORE=keyring` mode, enforce keyring strictly only when refresh/auth is needed.
+- Defer legacy plaintext password migration work to auth-time (no eager startup migration).
+- Add refresh serialization so concurrent calls do not trigger multi-prompt/multi-auth storms.
+- Preserve existing MCP error `kind` values for compatibility while improving refresh-time error messages.
+- Ship as one cohesive change: behavior + tests + README updates.
+
+### Implementation plan
+
+- Add base-url-only resolution path in config loading so runtime client creation does not require credential reads.
+- Add lazy client construction in `ReadApi` and CLI request path.
+- Resolve credentials only inside auth execution path (`/api/v1/auth/authenticate`).
+- Add refresh lock + cache recheck after lock acquisition.
+- On 401 retry, refresh once with stale-token detection so parallel retries reuse the newly refreshed token.
+- Keep eager credential path available for diagnostics and explicit auth checks.
+- Add targeted unit tests for lazy auth resolution behavior and refresh dedupe behavior.
+- Update README notes to document token-first/lazy credential resolution.
+
+### Acceptance criteria
+
+- Warm cache: no keychain prompt for normal operational commands.
+- Cold/expired cache: one credential resolution/auth path, then token cache repopulates.
+- Parallel auth pressure: no prompt storm.
+- `auth login` still forces a fresh authentication request.
+- `doctor` remains deep and authoritative.
