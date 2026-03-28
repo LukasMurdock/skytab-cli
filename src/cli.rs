@@ -36,6 +36,19 @@ pub enum Commands {
     Request(RequestArgs),
     Completion(CompletionArgs),
     Doctor,
+    Update(UpdateArgs),
+}
+
+#[derive(Debug, Clone, Args)]
+pub struct UpdateArgs {
+    #[arg(long, default_value_t = false)]
+    pub check: bool,
+    #[arg(long, default_value_t = false)]
+    pub yes: bool,
+    #[arg(long)]
+    pub version: Option<String>,
+    #[arg(long, default_value_t = false)]
+    pub also_mcp: bool,
 }
 
 #[derive(Debug, Clone, Args)]
@@ -415,6 +428,30 @@ mod tests {
                 other => panic!("expected daily-brief command, got: {other:?}"),
             },
             other => panic!("expected insights command, got: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parses_update_subcommand_flags() {
+        let cli = Cli::try_parse_from([
+            "skytab",
+            "update",
+            "--check",
+            "--yes",
+            "--version",
+            "v0.1.2",
+            "--also-mcp",
+        ])
+        .expect("update command should parse");
+
+        match cli.command {
+            Commands::Update(args) => {
+                assert!(args.check);
+                assert!(args.yes);
+                assert_eq!(args.version.as_deref(), Some("v0.1.2"));
+                assert!(args.also_mcp);
+            }
+            other => panic!("expected update command, got: {other:?}"),
         }
     }
 

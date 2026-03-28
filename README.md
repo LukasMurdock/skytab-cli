@@ -294,6 +294,17 @@ skytab doctor
 skytab doctor --json
 ```
 
+### Self-update
+
+```bash
+skytab update
+skytab update --check
+skytab update --yes
+skytab update --version v0.1.2 --yes
+```
+
+Use `--also-mcp` to update `skytab-mcp` when it exists in the same install directory.
+
 ### Shell completion
 
 ```bash
@@ -320,6 +331,9 @@ skytab completion fish > ~/.config/fish/completions/skytab.fish
 - `--output <path>` write output to a file (without `--format`, writes JSON)
 - `--date-range [today|yesterday|Ndays]` date shortcut for report/insight/timeclock/payment commands (defaults to `today` when omitted)
 - `request --allow-write` required for mutating HTTP methods (`post`, `put`, `patch`, `delete`)
+- `update --check` check for a new release without installing
+- `update --yes` skip confirmation prompt
+- `update --version <tag>` install a specific release tag
 - `-v, --verbose` request timing and diagnostics (`-vv` for debug-level detail)
 - `--base-url` override API base URL
 
