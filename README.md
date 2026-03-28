@@ -73,6 +73,9 @@ skytab auth set-credentials --username "you@example.com" --prompt-password
 By default, `set-credentials` stores passwords in the OS credential store (keychain/keyring) when available.
 If secure storage is unavailable, it falls back to `config.toml` in `auto` mode.
 
+Runtime auth is token-first: when a valid cached token exists, operational commands use it without
+touching keychain/keyring. Credential store access happens when a fresh auth token is required.
+
 Credential store mode (`SKYTAB_CREDENTIAL_STORE`):
 
 - `auto` (default): prefer keyring, fallback to config file
@@ -330,6 +333,7 @@ skytab -v reports payroll --start "2026-03-01" --end "2026-03-01" --json
 
 - Auth tokens are cached at `.../skytab/token.json` for 24 hours.
 - On `401`, the CLI refreshes auth once and retries.
+- Credential lookup (env/keyring/config) is lazy and happens when auth refresh is needed.
 
 ## Troubleshooting
 

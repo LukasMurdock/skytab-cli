@@ -12,7 +12,8 @@ use skytab_cli::cli::{
 };
 use skytab_cli::client::SkyTabClient;
 use skytab_cli::config::{
-    Config, clear_default_location_id, save_credentials, save_default_location_id,
+    clear_default_location_id, resolve_base_url_from_sources, save_credentials,
+    save_default_location_id,
 };
 use skytab_cli::error::{Result, SkyTabError};
 use skytab_cli::logging::init_tracing;
@@ -365,8 +366,8 @@ fn print_doctor_report(report: &DoctorReport) {
 }
 
 async fn build_client(base_url: Option<String>) -> Result<SkyTabClient> {
-    let config = Config::from_sources(base_url).await?;
-    Ok(SkyTabClient::new(config))
+    let resolved_base_url = resolve_base_url_from_sources(base_url).await?;
+    Ok(SkyTabClient::new_lazy(resolved_base_url))
 }
 
 fn map_method(method: HttpMethod) -> Method {

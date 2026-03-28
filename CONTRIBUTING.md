@@ -21,6 +21,14 @@ Run the CLI locally:
 cargo run -- --help
 ```
 
+`cargo run` executes your current local working tree, including unstaged changes.
+
+Full local run example (with flags):
+
+```bash
+cargo run -- insights daily-brief --date-range today --location 43101562 --json
+```
+
 Run the MCP server locally:
 
 ```bash

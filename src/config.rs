@@ -100,6 +100,11 @@ impl Config {
     }
 }
 
+pub async fn resolve_base_url_from_sources(base_url_override: Option<String>) -> Result<String> {
+    let from_file = load_file_config().await?;
+    Ok(resolve_base_url(base_url_override, from_file.as_ref()))
+}
+
 pub async fn save_credentials(
     username: String,
     password: String,

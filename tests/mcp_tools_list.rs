@@ -5,6 +5,37 @@ use rmcp::{
 };
 use skytab_cli::mcp_server::{READ_ONLY_TOOL_NAMES, SkyTabMcpServer};
 
+static ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+struct ScopedEnvVar {
+    key: &'static str,
+    previous: Option<String>,
+}
+
+impl ScopedEnvVar {
+    fn set(key: &'static str, value: Option<&str>) -> Self {
+        let previous = std::env::var(key).ok();
+        unsafe {
+            match value {
+                Some(value) => std::env::set_var(key, value),
+                None => std::env::remove_var(key),
+            }
+        }
+        Self { key, previous }
+    }
+}
+
+impl Drop for ScopedEnvVar {
+    fn drop(&mut self) {
+        unsafe {
+            match &self.previous {
+                Some(value) => std::env::set_var(self.key, value),
+                None => std::env::remove_var(self.key),
+            }
+        }
+    }
+}
+
 fn msg(raw: &str) -> ClientJsonRpcMessage {
     serde_json::from_str(raw).expect("invalid test message JSON")
 }
@@ -153,4 +184,35 @@ async fn timeclock_shifts_returns_structured_error_for_zero_limit() {
         .expect("expected structured error payload");
     assert_eq!(structured["kind"], "invalid_argument");
     assert_eq!(structured["message"], "limit must be greater than zero");
+}
+
+#[tokio::test]
+async fn auth_login_partial_env_error_is_contextual_and_compatible() {
+    let _env_lock = ENV_LOCK.lock().expect("env lock should be available");
+    let _username = ScopedEnvVar::set("SKYTAB_USERNAME", Some("partial@example.com"));
+    let _password = ScopedEnvVar::set("SKYTAB_PASSWORD", None);
+
+    let mut client = start_initialized_client().await;
+
+    client
+        .send(call_tool_request(
+            5,
+            "skytab.auth.login",
+            serde_json::json!({}),
+        ))
+        .await
+        .expect("send tools/call request");
+
+    let result =
+        expect_call_tool_result(client.receive().await.expect("receive tools/call response"));
+
+    assert_eq!(result.is_error, Some(true));
+    let structured = result
+        .structured_content
+        .expect("expected structured error payload");
+    assert_eq!(structured["kind"], "partial_env_credentials");
+    assert_eq!(
+        structured["message"],
+        "cached auth token is missing or expired and env credentials are incomplete; set both SKYTAB_USERNAME and SKYTAB_PASSWORD"
+    );
 }

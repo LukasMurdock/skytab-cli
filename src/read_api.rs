@@ -11,7 +11,7 @@ use crate::cache::TokenCache;
 use crate::client::SkyTabClient;
 use crate::config::{
     Config, credential_storage_diagnostics, current_config_file_path, get_default_location_id,
-    legacy_config_file_path,
+    legacy_config_file_path, resolve_base_url_from_sources,
 };
 use crate::error::{Result, SkyTabError};
 
@@ -790,8 +790,8 @@ impl ReadApi {
     }
 
     async fn build_client(&self) -> Result<SkyTabClient> {
-        let config = Config::from_sources(self.base_url.clone()).await?;
-        Ok(SkyTabClient::new(config))
+        let base_url = resolve_base_url_from_sources(self.base_url.clone()).await?;
+        Ok(SkyTabClient::new_lazy(base_url))
     }
 
     async fn resolve_single_location(&self, location: Option<i64>) -> Result<i64> {

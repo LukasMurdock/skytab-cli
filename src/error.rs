@@ -7,11 +7,24 @@ pub enum SkyTabError {
     )]
     MissingCredentials,
 
+    #[error(
+        "cached auth token is missing or expired and credentials are unavailable; set SKYTAB_USERNAME/SKYTAB_PASSWORD or run `skytab auth set-credentials`"
+    )]
+    MissingCredentialsForAuthRefresh,
+
     #[error("partial env credentials; set both SKYTAB_USERNAME and SKYTAB_PASSWORD")]
     PartialEnvCredentials,
 
+    #[error(
+        "cached auth token is missing or expired and env credentials are incomplete; set both SKYTAB_USERNAME and SKYTAB_PASSWORD"
+    )]
+    PartialEnvCredentialsForAuthRefresh,
+
     #[error("credential store error: {0}")]
     CredentialStore(String),
+
+    #[error("cached auth token is missing or expired and credential store lookup failed: {0}")]
+    CredentialStoreForAuthRefresh(String),
 
     #[error("io error: {0}")]
     Io(#[from] std::io::Error),

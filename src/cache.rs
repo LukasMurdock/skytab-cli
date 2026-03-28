@@ -69,6 +69,11 @@ impl TokenCache {
         legacy.push("token.json");
         legacy
     }
+
+    #[cfg(test)]
+    pub(crate) fn with_path(path: std::path::PathBuf, ttl_hours: i64) -> Self {
+        Self { path, ttl_hours }
+    }
 }
 
 async fn read_cache_content(path: &std::path::Path) -> std::io::Result<String> {

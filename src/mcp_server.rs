@@ -445,13 +445,28 @@ fn map_tool_error(err: SkyTabError) -> Value {
             "kind": "missing_credentials",
             "message": "missing credentials; set SKYTAB_USERNAME/SKYTAB_PASSWORD or run `skytab auth set-credentials`"
         }),
+        SkyTabError::MissingCredentialsForAuthRefresh => json!({
+            "kind": "missing_credentials",
+            "message": "cached auth token is missing or expired and credentials are unavailable; set SKYTAB_USERNAME/SKYTAB_PASSWORD or run `skytab auth set-credentials`"
+        }),
         SkyTabError::PartialEnvCredentials => json!({
             "kind": "partial_env_credentials",
             "message": "set both SKYTAB_USERNAME and SKYTAB_PASSWORD"
         }),
+        SkyTabError::PartialEnvCredentialsForAuthRefresh => json!({
+            "kind": "partial_env_credentials",
+            "message": "cached auth token is missing or expired and env credentials are incomplete; set both SKYTAB_USERNAME and SKYTAB_PASSWORD"
+        }),
         SkyTabError::CredentialStore(message) => json!({
             "kind": "credential_store_error",
             "message": message
+        }),
+        SkyTabError::CredentialStoreForAuthRefresh(message) => json!({
+            "kind": "credential_store_error",
+            "message": format!(
+                "cached auth token is missing or expired and credential store lookup failed: {}",
+                message
+            )
         }),
         SkyTabError::InvalidArgument(message) => json!({
             "kind": "invalid_argument",
