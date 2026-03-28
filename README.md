@@ -106,7 +106,7 @@ If your account has exactly one location, the CLI auto-selects it.
 ```bash
 skytab auth login --json
 skytab locations list
-skytab insights daily-brief --start "2026-03-01" --end "2026-03-01"
+skytab insights daily-brief
 ```
 
 This gives you a login check, location discovery, and an actionable operations summary.
@@ -214,14 +214,14 @@ skytab locations clear-default
 ### Reports
 
 ```bash
-skytab reports hourly-sales --start "2026-03-01" --end "2026-03-01" --json
-skytab reports activity-summary --start "2026-03-01" --end "2026-03-01" --json
-skytab reports discount-summary --start "2026-03-01" --end "2026-03-01" --json
+skytab reports hourly-sales --date-range today --json
+skytab reports activity-summary --date-range yesterday --json
+skytab reports discount-summary --date-range 7days --json
 skytab reports ticket-detail-closed --start "2026-03-01" --end "2026-03-01" --json
 skytab reports sales-summary-by-item --start "2026-03-01" --end "2026-03-01" --json
 skytab reports sales-summary-by-revenue-class --start "2026-03-01" --end "2026-03-01" --json
-skytab reports till-transaction --start "2026-03-01" --end "2026-03-01" --json
-skytab reports payroll --start "2026-03-01" --end "2026-03-01" --json
+skytab reports till-transaction --date-range 30days --json
+skytab reports payroll --date-range 7days --json
 ```
 
 Export report results:
@@ -233,29 +233,41 @@ skytab reports hourly-sales --start "2026-03-01" --end "2026-03-01" --format ndj
 
 Date-only ranges (`YYYY-MM-DD`) are expanded using location timezone boundaries.
 For multi-location calls, all locations must share a timezone when using date-only input.
+For payment-backed endpoints, RFC3339 inputs are normalized to millisecond precision automatically.
+
+Date shortcuts:
+
+- No date flags defaults to `today`.
+- `--date-range` supports `today`, `yesterday`, and `Ndays` (for example `7days`, `30days`).
+- `--date-range` (without a value) is equivalent to `--date-range today`.
+- `--date-range` cannot be combined with `--start`/`--end`.
 
 ### Insights
 
 ```bash
-skytab insights daily-brief --start "2026-03-01" --end "2026-03-01"
-skytab insights labor-vs-sales --start "2026-03-01" --end "2026-03-01" --json
-skytab insights payment-mix --start "2026-03-01" --end "2026-03-01" --format csv --output payment-mix.csv
+skytab insights daily-brief
+skytab insights labor-vs-sales --date-range 7days --json
+skytab insights payment-mix --date-range yesterday --format csv --output payment-mix.csv
 ```
 
 ### Timeclock
 
 ```bash
-skytab timeclock shifts --start "2026-03-01" --end "2026-03-01"
-skytab timeclock shifts --start "2026-03-01" --end "2026-03-01" --json
-skytab timeclock shifts --start "2026-03-01" --end "2026-03-01" --format csv --output shifts.csv
+skytab timeclock shifts
+skytab timeclock shifts --date-range 7days --json
+skytab timeclock shifts --date-range 30days --format csv --output shifts.csv
 ```
 
 ### Payments
 
 ```bash
-skytab payments transactions --start "2026-03-01" --end "2026-03-01" --order-type SALE --json
-skytab payments transactions --start "2026-03-01" --end "2026-03-01" --format ndjson --output payments.ndjson
+skytab payments transactions --date-range yesterday --order-type SALE --json
+skytab payments transactions --date-range 7days --format ndjson --output payments.ndjson
+skytab payments transactions --start "2026-03-01T00:00:00Z" --end "2026-03-01T23:59:59Z" --json
 ```
+
+`payments transactions` accepts RFC3339 with or without milliseconds.
+The CLI normalizes payment query timestamps to millisecond precision automatically.
 
 ### Accounts
 
@@ -303,6 +315,7 @@ skytab completion fish > ~/.config/fish/completions/skytab.fish
 - `--json` pretty JSON output
 - `--format json|csv|ndjson` structured output format
 - `--output <path>` write output to a file (without `--format`, writes JSON)
+- `--date-range [today|yesterday|Ndays]` date shortcut for report/insight/timeclock/payment commands (defaults to `today` when omitted)
 - `request --allow-write` required for mutating HTTP methods (`post`, `put`, `patch`, `delete`)
 - `-v, --verbose` request timing and diagnostics (`-vv` for debug-level detail)
 - `--base-url` override API base URL

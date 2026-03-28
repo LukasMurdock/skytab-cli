@@ -6,7 +6,7 @@ use rpassword::prompt_password;
 use serde_json::{Value, json};
 
 use skytab_cli::cli::{
-    AccountsSubcommand, AuthSubcommand, Cli, Commands, CompletionShell, HttpMethod,
+    AccountsSubcommand, AuthSubcommand, Cli, Commands, CompletionShell, DateRangeArgs, HttpMethod,
     InsightsSubcommand, LocationsSubcommand, PaymentsSubcommand, ReportsSubcommand,
     TimeclockSubcommand,
 };
@@ -121,11 +121,8 @@ async fn run(cli: Cli) -> Result<()> {
             }
         },
         Commands::Reports(args) => match args.command {
-            ReportsSubcommand::ActivitySummary {
-                start,
-                end,
-                location,
-            } => {
+            ReportsSubcommand::ActivitySummary { range, location } => {
+                let (start, end) = resolve_date_range(range)?;
                 let response = read_api
                     .report_activity_summary(start, end, location)
                     .await?;
@@ -135,11 +132,8 @@ async fn run(cli: Cli) -> Result<()> {
                     println!("buckets: {}", response.buckets.len());
                 }
             }
-            ReportsSubcommand::DiscountSummary {
-                start,
-                end,
-                location,
-            } => {
+            ReportsSubcommand::DiscountSummary { range, location } => {
+                let (start, end) = resolve_date_range(range)?;
                 let response = read_api
                     .report_discount_summary(start, end, location)
                     .await?;
@@ -149,11 +143,8 @@ async fn run(cli: Cli) -> Result<()> {
                     println!("rows: {}", response.rows.len());
                 }
             }
-            ReportsSubcommand::HourlySales {
-                start,
-                end,
-                location,
-            } => {
+            ReportsSubcommand::HourlySales { range, location } => {
+                let (start, end) = resolve_date_range(range)?;
                 let response = read_api.report_hourly_sales(start, end, location).await?;
 
                 if wants_structured_output(&cli) {
@@ -169,11 +160,8 @@ async fn run(cli: Cli) -> Result<()> {
                     }
                 }
             }
-            ReportsSubcommand::TicketDetailClosed {
-                start,
-                end,
-                location,
-            } => {
+            ReportsSubcommand::TicketDetailClosed { range, location } => {
+                let (start, end) = resolve_date_range(range)?;
                 let response = read_api
                     .report_ticket_detail_closed(start, end, location)
                     .await?;
@@ -183,11 +171,8 @@ async fn run(cli: Cli) -> Result<()> {
                     println!("rows: {}", response.rows.len());
                 }
             }
-            ReportsSubcommand::SalesSummaryByItem {
-                start,
-                end,
-                location,
-            } => {
+            ReportsSubcommand::SalesSummaryByItem { range, location } => {
+                let (start, end) = resolve_date_range(range)?;
                 let response = read_api
                     .report_sales_summary_by_item(start, end, location)
                     .await?;
@@ -197,11 +182,8 @@ async fn run(cli: Cli) -> Result<()> {
                     println!("rows: {}", response.rows.len());
                 }
             }
-            ReportsSubcommand::SalesSummaryByRevenueClass {
-                start,
-                end,
-                location,
-            } => {
+            ReportsSubcommand::SalesSummaryByRevenueClass { range, location } => {
+                let (start, end) = resolve_date_range(range)?;
                 let response = read_api
                     .report_sales_summary_by_revenue_class(start, end, location)
                     .await?;
@@ -211,11 +193,8 @@ async fn run(cli: Cli) -> Result<()> {
                     println!("rows: {}", response.rows.len());
                 }
             }
-            ReportsSubcommand::TillTransaction {
-                start,
-                end,
-                location,
-            } => {
+            ReportsSubcommand::TillTransaction { range, location } => {
+                let (start, end) = resolve_date_range(range)?;
                 let response = read_api
                     .report_till_transaction(start, end, location)
                     .await?;
@@ -226,11 +205,8 @@ async fn run(cli: Cli) -> Result<()> {
                     print_till_transaction_human(&response);
                 }
             }
-            ReportsSubcommand::Payroll {
-                start,
-                end,
-                location,
-            } => {
+            ReportsSubcommand::Payroll { range, location } => {
+                let (start, end) = resolve_date_range(range)?;
                 let response = read_api.report_payroll(start, end, location).await?;
 
                 if wants_structured_output(&cli) {
@@ -245,11 +221,8 @@ async fn run(cli: Cli) -> Result<()> {
             }
         },
         Commands::Insights(args) => match args.command {
-            InsightsSubcommand::DailyBrief {
-                start,
-                end,
-                location,
-            } => {
+            InsightsSubcommand::DailyBrief { range, location } => {
+                let (start, end) = resolve_date_range(range)?;
                 let response = read_api.insight_daily_brief(start, end, location).await?;
 
                 if wants_structured_output(&cli) {
@@ -262,11 +235,8 @@ async fn run(cli: Cli) -> Result<()> {
                     print_daily_brief_human(&response);
                 }
             }
-            InsightsSubcommand::LaborVsSales {
-                start,
-                end,
-                location,
-            } => {
+            InsightsSubcommand::LaborVsSales { range, location } => {
+                let (start, end) = resolve_date_range(range)?;
                 let response = read_api
                     .insight_labor_vs_sales(start, end, location)
                     .await?;
@@ -281,11 +251,8 @@ async fn run(cli: Cli) -> Result<()> {
                     print_labor_vs_sales_human(&response);
                 }
             }
-            InsightsSubcommand::PaymentMix {
-                start,
-                end,
-                location,
-            } => {
+            InsightsSubcommand::PaymentMix { range, location } => {
+                let (start, end) = resolve_date_range(range)?;
                 let response = read_api.insight_payment_mix(start, end, location).await?;
 
                 if wants_structured_output(&cli) {
@@ -302,11 +269,11 @@ async fn run(cli: Cli) -> Result<()> {
         Commands::Timeclock(args) => match args.command {
             TimeclockSubcommand::Shifts {
                 location_id,
-                start,
-                end,
+                range,
                 order,
                 limit,
             } => {
+                let (start, end) = resolve_date_range(range)?;
                 let result = read_api
                     .timeclock_shifts(location_id, start, end, order, limit)
                     .await?;
@@ -323,11 +290,11 @@ async fn run(cli: Cli) -> Result<()> {
         },
         Commands::Payments(args) => match args.command {
             PaymentsSubcommand::Transactions {
-                start,
-                end,
+                range,
                 location,
                 order_type,
             } => {
+                let (start, end) = resolve_date_range(range)?;
                 let result = read_api
                     .payments_transactions(start, end, location, order_type)
                     .await?;
@@ -427,6 +394,55 @@ fn is_mutating_method(method: &HttpMethod) -> bool {
         method,
         HttpMethod::Post | HttpMethod::Put | HttpMethod::Patch | HttpMethod::Delete
     )
+}
+
+fn resolve_date_range(range: DateRangeArgs) -> Result<(String, String)> {
+    if let Some(date_range) = range.date_range {
+        return resolve_named_date_range(&date_range);
+    }
+
+    match (range.start, range.end) {
+        (Some(start), Some(end)) => Ok((start, end)),
+        (None, None) => Ok(("today".to_string(), "today".to_string())),
+        _ => Err(SkyTabError::InvalidArgument(
+            "both --start and --end are required when using explicit range".into(),
+        )),
+    }
+}
+
+fn resolve_named_date_range(value: &str) -> Result<(String, String)> {
+    let normalized = value.trim().to_ascii_lowercase();
+
+    if normalized == "today" || normalized == "yesterday" {
+        return Ok((normalized.clone(), normalized));
+    }
+
+    if let Some(days) = parse_trailing_days_token(&normalized) {
+        if days == 0 {
+            return Err(SkyTabError::InvalidArgument(
+                "invalid --date-range value `0days`; use today, yesterday, or Ndays where N >= 1"
+                    .into(),
+            ));
+        }
+
+        return Ok((format!("{days}days"), "today".to_string()));
+    }
+
+    Err(SkyTabError::InvalidArgument(format!(
+        "invalid --date-range value `{value}`; expected today, yesterday, or Ndays (for example 7days)"
+    )))
+}
+
+fn parse_trailing_days_token(value: &str) -> Option<u32> {
+    let number = value
+        .strip_suffix("days")
+        .or_else(|| value.strip_suffix("day"))?;
+
+    if number.is_empty() {
+        return None;
+    }
+
+    number.parse::<u32>().ok()
 }
 
 fn render_completion_script(shell: CompletionShell) -> Result<String> {
@@ -886,5 +902,37 @@ mod tests {
     fn get_request_never_requires_allow_write() {
         ensure_mutating_request_allowed(&HttpMethod::Get, false)
             .expect("get should never require --allow-write");
+    }
+
+    #[test]
+    fn resolve_date_range_defaults_to_today() {
+        let (start, end) = resolve_date_range(DateRangeArgs {
+            start: None,
+            end: None,
+            date_range: None,
+        })
+        .expect("empty date range should default to today");
+
+        assert_eq!(start, "today");
+        assert_eq!(end, "today");
+    }
+
+    #[test]
+    fn resolve_named_date_range_supports_rolling_days() {
+        let (start, end) = resolve_named_date_range("7days").expect("rolling range should parse");
+        assert_eq!(start, "7days");
+        assert_eq!(end, "today");
+    }
+
+    #[test]
+    fn resolve_named_date_range_rejects_invalid_values() {
+        let err = resolve_named_date_range("lastweek").expect_err("invalid range should fail");
+
+        match err {
+            SkyTabError::InvalidArgument(message) => {
+                assert!(message.contains("--date-range"));
+            }
+            other => panic!("unexpected error: {other}"),
+        }
     }
 }
