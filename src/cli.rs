@@ -109,69 +109,82 @@ pub struct ReportsArgs {
     pub command: ReportsSubcommand,
 }
 
+#[derive(Debug, Clone, Args)]
+pub struct DateRangeArgs {
+    #[arg(
+        long,
+        requires = "end",
+        conflicts_with = "date_range",
+        help = "Range start (YYYY-MM-DD or RFC3339)",
+        long_help = "Range start (YYYY-MM-DD or RFC3339). For payment-backed endpoints, RFC3339 input is normalized to millisecond precision automatically."
+    )]
+    pub start: Option<String>,
+    #[arg(
+        long,
+        requires = "start",
+        conflicts_with = "date_range",
+        help = "Range end (YYYY-MM-DD or RFC3339)",
+        long_help = "Range end (YYYY-MM-DD or RFC3339). For payment-backed endpoints, RFC3339 input is normalized to millisecond precision automatically."
+    )]
+    pub end: Option<String>,
+    #[arg(
+        long,
+        num_args = 0..=1,
+        default_missing_value = "today",
+        value_name = "RANGE",
+        conflicts_with_all = ["start", "end"],
+        help = "Date shortcut: today | yesterday | Ndays"
+    )]
+    pub date_range: Option<String>,
+}
+
 #[derive(Debug, Clone, Subcommand)]
 pub enum ReportsSubcommand {
     ActivitySummary {
-        #[arg(long)]
-        start: String,
-        #[arg(long)]
-        end: String,
+        #[command(flatten)]
+        range: DateRangeArgs,
         #[arg(long)]
         location: Option<i64>,
     },
     DiscountSummary {
-        #[arg(long)]
-        start: String,
-        #[arg(long)]
-        end: String,
+        #[command(flatten)]
+        range: DateRangeArgs,
         #[arg(long)]
         location: Vec<i64>,
     },
     HourlySales {
-        #[arg(long)]
-        start: String,
-        #[arg(long)]
-        end: String,
+        #[command(flatten)]
+        range: DateRangeArgs,
         #[arg(long)]
         location: Vec<i64>,
     },
     TicketDetailClosed {
-        #[arg(long)]
-        start: String,
-        #[arg(long)]
-        end: String,
+        #[command(flatten)]
+        range: DateRangeArgs,
         #[arg(long)]
         location: Vec<i64>,
     },
     SalesSummaryByItem {
-        #[arg(long)]
-        start: String,
-        #[arg(long)]
-        end: String,
+        #[command(flatten)]
+        range: DateRangeArgs,
         #[arg(long)]
         location: Vec<i64>,
     },
     SalesSummaryByRevenueClass {
-        #[arg(long)]
-        start: String,
-        #[arg(long)]
-        end: String,
+        #[command(flatten)]
+        range: DateRangeArgs,
         #[arg(long)]
         location: Vec<i64>,
     },
     TillTransaction {
-        #[arg(long)]
-        start: String,
-        #[arg(long)]
-        end: String,
+        #[command(flatten)]
+        range: DateRangeArgs,
         #[arg(long)]
         location: Vec<i64>,
     },
     Payroll {
-        #[arg(long)]
-        start: String,
-        #[arg(long)]
-        end: String,
+        #[command(flatten)]
+        range: DateRangeArgs,
         #[arg(long)]
         location: Vec<i64>,
     },
@@ -186,26 +199,20 @@ pub struct InsightsArgs {
 #[derive(Debug, Clone, Subcommand)]
 pub enum InsightsSubcommand {
     DailyBrief {
-        #[arg(long)]
-        start: String,
-        #[arg(long)]
-        end: String,
+        #[command(flatten)]
+        range: DateRangeArgs,
         #[arg(long)]
         location: Vec<i64>,
     },
     LaborVsSales {
-        #[arg(long)]
-        start: String,
-        #[arg(long)]
-        end: String,
+        #[command(flatten)]
+        range: DateRangeArgs,
         #[arg(long)]
         location: Vec<i64>,
     },
     PaymentMix {
-        #[arg(long)]
-        start: String,
-        #[arg(long)]
-        end: String,
+        #[command(flatten)]
+        range: DateRangeArgs,
         #[arg(long)]
         location: Vec<i64>,
     },
@@ -222,10 +229,8 @@ pub enum TimeclockSubcommand {
     Shifts {
         #[arg(long)]
         location_id: Option<i64>,
-        #[arg(long)]
-        start: String,
-        #[arg(long)]
-        end: String,
+        #[command(flatten)]
+        range: DateRangeArgs,
         #[arg(long, default_value = "clockedInAt asc")]
         order: String,
         #[arg(long, default_value_t = 100)]
@@ -242,10 +247,8 @@ pub struct PaymentsArgs {
 #[derive(Debug, Clone, Subcommand)]
 pub enum PaymentsSubcommand {
     Transactions {
-        #[arg(long)]
-        start: String,
-        #[arg(long)]
-        end: String,
+        #[command(flatten)]
+        range: DateRangeArgs,
         #[arg(long)]
         location: Vec<i64>,
         #[arg(long)]
@@ -384,18 +387,89 @@ mod tests {
 
         match cli.command {
             Commands::Insights(args) => match args.command {
-                InsightsSubcommand::DailyBrief {
-                    start,
-                    end,
-                    location,
-                } => {
-                    assert_eq!(start, "2026-03-01");
-                    assert_eq!(end, "2026-03-01");
+                InsightsSubcommand::DailyBrief { range, location } => {
+                    assert_eq!(range.start.as_deref(), Some("2026-03-01"));
+                    assert_eq!(range.end.as_deref(), Some("2026-03-01"));
+                    assert!(range.date_range.is_none());
                     assert!(location.is_empty());
                 }
                 other => panic!("expected daily-brief command, got: {other:?}"),
             },
             other => panic!("expected insights command, got: {other:?}"),
         }
+    }
+
+    #[test]
+    fn parses_insights_daily_brief_without_date_flags() {
+        let cli = Cli::try_parse_from(["skytab", "insights", "daily-brief"])
+            .expect("insights daily-brief should parse without date flags");
+
+        match cli.command {
+            Commands::Insights(args) => match args.command {
+                InsightsSubcommand::DailyBrief { range, location } => {
+                    assert!(range.start.is_none());
+                    assert!(range.end.is_none());
+                    assert!(range.date_range.is_none());
+                    assert!(location.is_empty());
+                }
+                other => panic!("expected daily-brief command, got: {other:?}"),
+            },
+            other => panic!("expected insights command, got: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parses_date_range_flag_without_value_as_today() {
+        let cli = Cli::try_parse_from(["skytab", "insights", "daily-brief", "--date-range"])
+            .expect("--date-range should parse with implicit today");
+
+        match cli.command {
+            Commands::Insights(args) => match args.command {
+                InsightsSubcommand::DailyBrief { range, .. } => {
+                    assert_eq!(range.date_range.as_deref(), Some("today"));
+                    assert!(range.start.is_none());
+                    assert!(range.end.is_none());
+                }
+                other => panic!("expected daily-brief command, got: {other:?}"),
+            },
+            other => panic!("expected insights command, got: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parses_date_range_flag_with_named_range() {
+        let cli = Cli::try_parse_from(["skytab", "reports", "payroll", "--date-range", "7days"])
+            .expect("named date range should parse");
+
+        match cli.command {
+            Commands::Reports(args) => match args.command {
+                ReportsSubcommand::Payroll { range, .. } => {
+                    assert_eq!(range.date_range.as_deref(), Some("7days"));
+                    assert!(range.start.is_none());
+                    assert!(range.end.is_none());
+                }
+                other => panic!("expected payroll command, got: {other:?}"),
+            },
+            other => panic!("expected reports command, got: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn rejects_combining_date_range_with_start_end() {
+        let err = Cli::try_parse_from([
+            "skytab",
+            "insights",
+            "daily-brief",
+            "--date-range",
+            "today",
+            "--start",
+            "2026-03-01",
+            "--end",
+            "2026-03-01",
+        ])
+        .expect_err("date-range should conflict with explicit range");
+
+        let rendered = err.to_string();
+        assert!(rendered.contains("cannot be used with"));
     }
 }

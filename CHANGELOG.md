@@ -18,6 +18,7 @@ The format is based on Keep a Changelog and this project uses Semantic Versionin
 - add keyring-backed credential storage (with config fallback in `auto` mode).
 - add `insights` command group with `daily-brief`, `labor-vs-sales`, and `payment-mix` decision summaries.
 - add MCP tools for insights: `skytab.insights.daily_brief`, `skytab.insights.labor_vs_sales`, `skytab.insights.payment_mix`, and composite `skytab.insights.end_of_day`.
+- add `--date-range` shortcuts (`today`, `yesterday`, `Ndays`) for report, insight, timeclock, and payment commands, with implicit `today` defaults.
 
 ### CI
 
@@ -31,6 +32,7 @@ The format is based on Keep a Changelog and this project uses Semantic Versionin
 - block mutating `request` methods by default; require explicit `--allow-write` for `post`, `put`, `patch`, and `delete`.
 - enforce full env credential pairs (error on only one of `SKYTAB_USERNAME`/`SKYTAB_PASSWORD`).
 - harden token cache writes to private file permissions on unix (`0600`).
+- resolve relative date shortcuts for `payments transactions` in location timezone before querying.
 
 ### Docs
 

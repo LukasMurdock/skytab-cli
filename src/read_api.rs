@@ -1,4 +1,4 @@
-use chrono::{Datelike, NaiveDate, TimeZone, Utc};
+use chrono::{Datelike, Days, Duration, NaiveDate, TimeZone, Utc};
 use chrono_tz::Tz;
 use reqwest::Method;
 use serde::de::DeserializeOwned;
@@ -499,6 +499,9 @@ impl ReadApi {
     ) -> Result<TransactionsResult> {
         let location = self.resolve_locations(location).await?;
         let client = self.build_client().await?;
+        let (start, end) =
+            normalize_payments_query_range_for_locations_timezones(&client, &location, start, end)
+                .await?;
         fetch_transactions(&client, start, end, location, order_type).await
     }
 
@@ -564,8 +567,21 @@ impl ReadApi {
     ) -> Result<InsightMetrics> {
         let location_ids = self.resolve_locations(location).await?;
         let client = self.build_client().await?;
-        let (period_start, period_end) =
-            normalize_range_for_locations_timezones(&client, &location_ids, start, end).await?;
+        let (period_start, period_end) = normalize_range_for_locations_timezones(
+            &client,
+            &location_ids,
+            start.clone(),
+            end.clone(),
+        )
+        .await?;
+        let (payments_start, payments_end) =
+            normalize_payments_query_range_for_locations_timezones(
+                &client,
+                &location_ids,
+                start,
+                end,
+            )
+            .await?;
 
         let hourly_sales_future = run_multi_location_report_with_client::<HourlySalesResponse>(
             &client,
@@ -583,8 +599,8 @@ impl ReadApi {
         );
         let payments_future = fetch_transactions(
             &client,
-            period_start.clone(),
-            period_end.clone(),
+            payments_start,
+            payments_end,
             location_ids.clone(),
             None,
         );
@@ -1362,6 +1378,62 @@ async fn normalize_range_for_location_timezone(
     normalize_range_for_locations_timezones(client, &[location_id], start, end).await
 }
 
+async fn normalize_payments_query_range_for_locations_timezones(
+    client: &SkyTabClient,
+    location_ids: &[i64],
+    start: String,
+    end: String,
+) -> Result<(String, String)> {
+    let start_is_date = is_date_only(&start);
+    let end_is_date = is_date_only(&end);
+    let start_is_relative = is_relative_date_keyword(&start);
+    let end_is_relative = is_relative_date_keyword(&end);
+
+    if !start_is_date && !end_is_date && !start_is_relative && !end_is_relative {
+        return Ok((
+            normalize_payments_query_datetime(&start)?,
+            normalize_payments_query_datetime(&end)?,
+        ));
+    }
+
+    let timezone = fetch_shared_timezone_for_locations(client, location_ids).await?;
+    let start_value = if start_is_relative {
+        resolve_relative_date_keyword(&start, &timezone)?
+    } else {
+        start
+    };
+    let end_value = if end_is_relative {
+        resolve_relative_date_keyword(&end, &timezone)?
+    } else {
+        end
+    };
+
+    let start_out = if is_date_only(&start_value) {
+        date_only_to_utc_boundary_for_payments_query(&start_value, &timezone, true)?
+    } else {
+        normalize_payments_query_datetime(&start_value)?
+    };
+    let end_out = if is_date_only(&end_value) {
+        date_only_to_utc_boundary_for_payments_query(&end_value, &timezone, false)?
+    } else {
+        normalize_payments_query_datetime(&end_value)?
+    };
+
+    Ok((start_out, end_out))
+}
+
+fn normalize_payments_query_datetime(value: &str) -> Result<String> {
+    let parsed = chrono::DateTime::parse_from_rfc3339(value).map_err(|_| {
+        SkyTabError::InvalidArgument(format!(
+            "invalid datetime format for payments query: {value}; expected RFC3339 (for example 2026-03-28T00:00:00.000Z)"
+        ))
+    })?;
+
+    Ok(parsed
+        .with_timezone(&Utc)
+        .to_rfc3339_opts(chrono::SecondsFormat::Millis, true))
+}
+
 async fn normalize_range_for_locations_timezones(
     client: &SkyTabClient,
     location_ids: &[i64],
@@ -1370,24 +1442,102 @@ async fn normalize_range_for_locations_timezones(
 ) -> Result<(String, String)> {
     let start_is_date = is_date_only(&start);
     let end_is_date = is_date_only(&end);
+    let start_is_relative = is_relative_date_keyword(&start);
+    let end_is_relative = is_relative_date_keyword(&end);
 
-    if !start_is_date && !end_is_date {
+    if !start_is_date && !end_is_date && !start_is_relative && !end_is_relative {
         return Ok((start, end));
     }
 
     let timezone = fetch_shared_timezone_for_locations(client, location_ids).await?;
-    let start_out = if start_is_date {
-        date_only_to_utc_boundary(&start, &timezone, true)?
+    let start_value = if start_is_relative {
+        resolve_relative_date_keyword(&start, &timezone)?
     } else {
         start
     };
-    let end_out = if end_is_date {
-        date_only_to_utc_boundary(&end, &timezone, false)?
+    let end_value = if end_is_relative {
+        resolve_relative_date_keyword(&end, &timezone)?
     } else {
         end
     };
 
+    let start_out = if is_date_only(&start_value) {
+        date_only_to_utc_boundary(&start_value, &timezone, true)?
+    } else {
+        start_value
+    };
+    let end_out = if is_date_only(&end_value) {
+        date_only_to_utc_boundary(&end_value, &timezone, false)?
+    } else {
+        end_value
+    };
+
     Ok((start_out, end_out))
+}
+
+fn resolve_relative_date_keyword(value: &str, timezone: &str) -> Result<String> {
+    resolve_relative_date_keyword_with_now(value, timezone, Utc::now())
+}
+
+fn resolve_relative_date_keyword_with_now(
+    value: &str,
+    timezone: &str,
+    now_utc: chrono::DateTime<Utc>,
+) -> Result<String> {
+    let normalized = value.trim().to_ascii_lowercase();
+    let tz: Tz = timezone
+        .parse()
+        .map_err(|_| SkyTabError::InvalidArgument(format!("invalid timezone: {timezone}")))?;
+    let today = now_utc.with_timezone(&tz).date_naive();
+
+    let resolved = match normalized.as_str() {
+        "today" => today,
+        "yesterday" => today
+            .checked_sub_days(Days::new(1))
+            .ok_or_else(|| SkyTabError::InvalidArgument("unable to resolve yesterday".into()))?,
+        _ => {
+            let days = parse_trailing_days_keyword(&normalized).ok_or_else(|| {
+                SkyTabError::InvalidArgument(format!(
+                    "invalid relative date value: {value}; expected today, yesterday, or Ndays"
+                ))
+            })?;
+
+            if days == 0 {
+                return Err(SkyTabError::InvalidArgument(
+                    "invalid relative date value: 0days; use today, yesterday, or Ndays where N >= 1"
+                        .into(),
+                ));
+            }
+
+            let offset = u64::from(days - 1);
+            today.checked_sub_days(Days::new(offset)).ok_or_else(|| {
+                SkyTabError::InvalidArgument(format!(
+                    "unable to resolve relative date value: {value}"
+                ))
+            })?
+        }
+    };
+
+    Ok(resolved.format("%Y-%m-%d").to_string())
+}
+
+fn is_relative_date_keyword(value: &str) -> bool {
+    let normalized = value.trim().to_ascii_lowercase();
+    normalized == "today"
+        || normalized == "yesterday"
+        || parse_trailing_days_keyword(&normalized).is_some()
+}
+
+fn parse_trailing_days_keyword(value: &str) -> Option<u32> {
+    let number = value
+        .strip_suffix("days")
+        .or_else(|| value.strip_suffix("day"))?;
+
+    if number.is_empty() {
+        return None;
+    }
+
+    number.parse::<u32>().ok()
 }
 
 async fn fetch_shared_timezone_for_locations(
@@ -1472,6 +1622,43 @@ fn date_only_to_utc_boundary(date: &str, timezone: &str, is_start: bool) -> Resu
     Ok(local_dt
         .with_timezone(&Utc)
         .to_rfc3339_opts(chrono::SecondsFormat::Secs, true))
+}
+
+fn date_only_to_utc_boundary_for_payments_query(
+    date: &str,
+    timezone: &str,
+    is_start: bool,
+) -> Result<String> {
+    let parsed_date = NaiveDate::parse_from_str(date, "%Y-%m-%d")
+        .map_err(|_| SkyTabError::InvalidArgument(format!("invalid date format: {date}")))?;
+    let tz: Tz = timezone
+        .parse()
+        .map_err(|_| SkyTabError::InvalidArgument(format!("invalid timezone: {timezone}")))?;
+
+    let local_dt = if is_start {
+        tz.with_ymd_and_hms(
+            parsed_date.year(),
+            parsed_date.month(),
+            parsed_date.day(),
+            0,
+            0,
+            0,
+        )
+        .single()
+    } else {
+        let next_day = parsed_date.checked_add_days(Days::new(1)).ok_or_else(|| {
+            SkyTabError::InvalidArgument(format!("invalid end date boundary for {date}"))
+        })?;
+
+        tz.with_ymd_and_hms(next_day.year(), next_day.month(), next_day.day(), 0, 0, 0)
+            .single()
+            .map(|start_of_next_day| start_of_next_day - Duration::milliseconds(1))
+    }
+    .ok_or_else(|| SkyTabError::InvalidArgument(format!("invalid local datetime for {date}")))?;
+
+    Ok(local_dt
+        .with_timezone(&Utc)
+        .to_rfc3339_opts(chrono::SecondsFormat::Millis, true))
 }
 
 fn is_date_only(value: &str) -> bool {
@@ -1818,6 +2005,70 @@ mod tests {
         assert!(is_date_only("2026-03-28"));
         assert!(!is_date_only("2026-03-28T00:00:00Z"));
         assert!(!is_date_only("20260328"));
+    }
+
+    #[test]
+    fn normalizes_payments_query_datetime_to_milliseconds() {
+        let normalized = normalize_payments_query_datetime("2026-03-28T00:00:00Z")
+            .expect("rfc3339 timestamp should normalize");
+        assert_eq!(normalized, "2026-03-28T00:00:00.000Z");
+    }
+
+    #[test]
+    fn payment_date_only_boundaries_include_millisecond_precision() {
+        let start = date_only_to_utc_boundary_for_payments_query("2026-03-28", "UTC", true)
+            .expect("start boundary should parse");
+        let end = date_only_to_utc_boundary_for_payments_query("2026-03-28", "UTC", false)
+            .expect("end boundary should parse");
+
+        assert_eq!(start, "2026-03-28T00:00:00.000Z");
+        assert_eq!(end, "2026-03-28T23:59:59.999Z");
+    }
+
+    #[test]
+    fn detects_relative_date_keywords() {
+        assert!(is_relative_date_keyword("today"));
+        assert!(is_relative_date_keyword("YESTERDAY"));
+        assert!(is_relative_date_keyword("7days"));
+        assert!(is_relative_date_keyword("1day"));
+        assert!(!is_relative_date_keyword("lastweek"));
+    }
+
+    #[test]
+    fn resolves_relative_date_keywords_with_timezone() {
+        let now = chrono::DateTime::parse_from_rfc3339("2026-03-28T01:30:00Z")
+            .expect("fixed timestamp should parse")
+            .with_timezone(&Utc);
+
+        let la_today = resolve_relative_date_keyword_with_now("today", "America/Los_Angeles", now)
+            .expect("today should resolve");
+        let la_yesterday =
+            resolve_relative_date_keyword_with_now("yesterday", "America/Los_Angeles", now)
+                .expect("yesterday should resolve");
+        let la_rolling =
+            resolve_relative_date_keyword_with_now("7days", "America/Los_Angeles", now)
+                .expect("rolling range should resolve");
+
+        assert_eq!(la_today, "2026-03-27");
+        assert_eq!(la_yesterday, "2026-03-26");
+        assert_eq!(la_rolling, "2026-03-21");
+    }
+
+    #[test]
+    fn rejects_invalid_relative_date_keyword() {
+        let now = chrono::DateTime::parse_from_rfc3339("2026-03-28T12:00:00Z")
+            .expect("fixed timestamp should parse")
+            .with_timezone(&Utc);
+
+        let err = resolve_relative_date_keyword_with_now("0days", "UTC", now)
+            .expect_err("0days should be rejected");
+
+        match err {
+            SkyTabError::InvalidArgument(message) => {
+                assert!(message.contains("0days"));
+            }
+            other => panic!("unexpected error: {other}"),
+        }
     }
 
     #[test]
