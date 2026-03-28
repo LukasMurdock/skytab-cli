@@ -21,6 +21,12 @@ Run the CLI locally:
 cargo run -- --help
 ```
 
+Run the MCP server locally:
+
+```bash
+cargo run --bin skytab-mcp -- --help
+```
+
 ## Credentials for Development
 
 Use one of these:
@@ -46,6 +52,13 @@ Config path:
 ```bash
 cargo fmt
 cargo check
+cargo test
+```
+
+Run MCP protocol tests explicitly:
+
+```bash
+cargo test --test mcp_tools_list
 ```
 
 Suggested manual smoke test:
@@ -54,12 +67,23 @@ Suggested manual smoke test:
 cargo run -- auth login --json
 cargo run -- locations list
 cargo run -- timeclock shifts --start "2026-03-01" --end "2026-03-01"
+cargo run --bin skytab-mcp -- --help
 ```
+
+For MCP protocol smoke checks, run `skytab-mcp` and connect with MCP Inspector.
+
+CI runs two jobs:
+
+- `rust-checks` for formatting, compile, and unit/bin tests
+- `mcp-protocol-tests` for stdio protocol integration coverage
 
 ## Project Layout
 
 - `src/cli.rs` command and argument definitions
-- `src/main.rs` command execution and output formatting
+- `src/main.rs` CLI entrypoint and human output formatting
+- `src/read_api.rs` shared read-only application logic used by CLI and MCP
+- `src/mcp_server.rs` MCP tool server adapter
+- `src/bin/skytab-mcp.rs` MCP stdio binary entrypoint
 - `src/client.rs` HTTP/auth/retry logic
 - `src/config.rs` credential/config loading and saving
 - `src/cache.rs` token cache

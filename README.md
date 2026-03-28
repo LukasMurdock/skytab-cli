@@ -27,12 +27,14 @@ curl -fsSL https://github.com/LukasMurdock/skytab-cli/releases/latest/download/i
 ```bash
 cargo build --release
 ./target/release/skytab --help
+./target/release/skytab-mcp --help
 ```
 
 Optional: move it into your PATH.
 
 ```bash
 cp ./target/release/skytab /usr/local/bin/skytab
+cp ./target/release/skytab-mcp /usr/local/bin/skytab-mcp
 ```
 
 ### From packaged archive
@@ -42,6 +44,7 @@ After downloading a release archive like `skytab-v0.1.0-<target>.tar.gz`:
 ```bash
 tar -xzf skytab-v0.1.0-<target>.tar.gz
 ./skytab --help
+./skytab-mcp --help
 ```
 
 ## Configure Credentials
@@ -81,6 +84,63 @@ skytab locations set-default --location-id 43101562
 
 With a default location set, most location flags can be omitted.
 If your account has exactly one location, the CLI auto-selects it.
+
+## MCP Server (Read-Only)
+
+`skytab-mcp` exposes all read-only SkyTab operations over Model Context Protocol (stdio transport).
+
+Run locally:
+
+```bash
+cargo run --bin skytab-mcp --
+```
+
+Install `skytab-mcp` from latest release:
+
+```bash
+curl -fsSL https://github.com/LukasMurdock/skytab-cli/releases/latest/download/install.sh | BIN_NAME=skytab-mcp sh
+```
+
+Or with release binary:
+
+```bash
+./target/release/skytab-mcp
+```
+
+Available tools:
+
+- `skytab.auth.login`
+- `skytab.locations.list`
+- `skytab.locations.show_default`
+- `skytab.accounts.preferences`
+- `skytab.reports.activity_summary`
+- `skytab.reports.discount_summary`
+- `skytab.reports.hourly_sales`
+- `skytab.reports.ticket_detail_closed`
+- `skytab.reports.sales_summary_by_item`
+- `skytab.reports.sales_summary_by_revenue_class`
+- `skytab.reports.till_transaction`
+- `skytab.reports.payroll`
+- `skytab.timeclock.shifts`
+- `skytab.payments.transactions`
+- `skytab.request.get` (GET only)
+- `skytab.doctor`
+
+Example Claude Desktop MCP config:
+
+```json
+{
+  "mcpServers": {
+    "skytab": {
+      "command": "/absolute/path/to/skytab-mcp",
+      "env": {
+        "SKYTAB_USERNAME": "you@example.com",
+        "SKYTAB_PASSWORD": "your-password"
+      }
+    }
+  }
+}
+```
 
 ## Common Commands
 

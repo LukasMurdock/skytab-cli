@@ -18,15 +18,12 @@ jobs:
           - os: ubuntu-latest
             target: x86_64-unknown-linux-musl
             archive_ext: tar.gz
-            binary_name: skytab
           - os: macos-14
             target: aarch64-apple-darwin
             archive_ext: tar.gz
-            binary_name: skytab
           - os: macos-14
             target: x86_64-apple-darwin
             archive_ext: tar.gz
-            binary_name: skytab
 
     runs-on: ${{ matrix.os }}
 
@@ -50,10 +47,11 @@ jobs:
           VERSION="${GITHUB_REF_NAME:-dev}"
           ARTIFACT="skytab-${VERSION}-${{ matrix.target }}"
           mkdir -p dist
-          cp "target/${{ matrix.target }}/release/${{ matrix.binary_name }}" "dist/${{ matrix.binary_name }}"
+          cp "target/${{ matrix.target }}/release/skytab" "dist/skytab"
+          cp "target/${{ matrix.target }}/release/skytab-mcp" "dist/skytab-mcp"
           cp README.md dist/README.md
           cp LICENSE dist/LICENSE
-          tar -C dist -czf "${ARTIFACT}.tar.gz" "${{ matrix.binary_name }}" README.md LICENSE
+          tar -C dist -czf "${ARTIFACT}.tar.gz" skytab skytab-mcp README.md LICENSE
           rm -rf dist
 
       - name: Upload build artifact

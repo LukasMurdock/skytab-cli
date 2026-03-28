@@ -6,6 +6,15 @@ The format is based on Keep a Changelog and this project uses Semantic Versionin
 
 ## [Unreleased]
 
+### Added
+
+- add `skytab-mcp`, a read-only MCP server exposing auth, locations, reports, timeclock, payments, request GET, and doctor tools.
+- extract shared read-only API logic into `src/read_api.rs` so CLI and MCP use the same core paths.
+
+### CI
+
+- add a dedicated `ci` workflow with separate `rust-checks` and `mcp-protocol-tests` jobs.
+
 ### Changed
 
 - add a labeled header row (`DATE`, `HOUR`, `GROSS`, `NET`) to `reports hourly-sales` human output.

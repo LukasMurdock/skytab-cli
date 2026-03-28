@@ -2,7 +2,8 @@
 set -eu
 
 REPO="LukasMurdock/skytab-cli"
-BIN_NAME="skytab"
+BIN_NAME="${BIN_NAME:-skytab}"
+ARCHIVE_NAME="${ARCHIVE_NAME:-skytab}"
 INSTALL_DIR="${INSTALL_DIR:-$HOME/.local/bin}"
 VERSION="${VERSION:-latest}"
 
@@ -91,7 +92,7 @@ require_cmd tar
 
 TARGET="$(detect_target)"
 TAG="$(resolve_version)"
-ASSET="${BIN_NAME}-${TAG}-${TARGET}.tar.gz"
+ASSET="${ARCHIVE_NAME}-${TAG}-${TARGET}.tar.gz"
 CHECKSUMS_URL="https://github.com/$REPO/releases/download/$TAG/checksums.txt"
 ASSET_URL="https://github.com/$REPO/releases/download/$TAG/$ASSET"
 
