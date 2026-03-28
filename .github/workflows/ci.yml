@@ -31,6 +31,9 @@ jobs:
       - name: Run unit and binary tests
         run: cargo test --lib --bins
 
+      - name: Run CSV schema golden tests
+        run: cargo test --test csv_schema_golden
+
   mcp-protocol-tests:
     runs-on: ubuntu-latest
 

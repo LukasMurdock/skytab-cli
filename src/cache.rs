@@ -1,5 +1,6 @@
 use chrono::{DateTime, Duration, Utc};
 use serde::{Deserialize, Serialize};
+use std::path::Path;
 use tokio::fs;
 
 use crate::error::Result;
@@ -54,6 +55,7 @@ impl TokenCache {
         };
         let serialized = serde_json::to_string_pretty(&record)?;
         fs::write(&self.path, serialized).await?;
+        set_unix_private_permissions(&self.path)?;
         Ok(())
     }
 
@@ -81,4 +83,14 @@ async fn read_cache_content(path: &std::path::Path) -> std::io::Result<String> {
         }
         Err(err) => Err(err),
     }
+}
+
+fn set_unix_private_permissions(path: &Path) -> Result<()> {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600))?;
+    }
+
+    Ok(())
 }

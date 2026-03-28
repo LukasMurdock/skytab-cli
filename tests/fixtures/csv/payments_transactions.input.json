@@ -1,0 +1,22 @@
+{
+  "transactions": [
+    {
+      "id": "txn_1001",
+      "createdAt": "2026-03-01T12:34:56Z",
+      "type": "SALE",
+      "status": "SETTLED",
+      "amount": "12.34",
+      "tipAmount": "2.00",
+      "taxAmount": "1.00",
+      "totalAmount": "15.34",
+      "currency": "USD",
+      "locationId": "43101562",
+      "orderId": "check_77",
+      "reference": "auth123",
+      "paymentMethod": {
+        "cardBrand": "VISA",
+        "last4": "4242"
+      }
+    }
+  ]
+}

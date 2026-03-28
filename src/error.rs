@@ -2,8 +2,16 @@ use thiserror::Error;
 
 #[derive(Debug, Error)]
 pub enum SkyTabError {
-    #[error("missing SKYTAB_USERNAME or SKYTAB_PASSWORD")]
+    #[error(
+        "missing credentials; set SKYTAB_USERNAME/SKYTAB_PASSWORD or run `skytab auth set-credentials`"
+    )]
     MissingCredentials,
+
+    #[error("partial env credentials; set both SKYTAB_USERNAME and SKYTAB_PASSWORD")]
+    PartialEnvCredentials,
+
+    #[error("credential store error: {0}")]
+    CredentialStore(String),
 
     #[error("io error: {0}")]
     Io(#[from] std::io::Error),

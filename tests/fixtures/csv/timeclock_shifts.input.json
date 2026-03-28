@@ -1,0 +1,23 @@
+{
+  "timeClockShifts": [
+    {
+      "guid": "shift-1",
+      "employee": { "name": "Alice Smith" },
+      "clockedInAt": "2026-03-01T09:00:00Z",
+      "clockedOutAt": "2026-03-01T17:00:00Z",
+      "payRate": "15.00",
+      "job": { "name": "Server" },
+      "locationId": 43101562
+    },
+    {
+      "guid": "shift-2",
+      "employee": { "name": "Bob Stone" },
+      "clockedInAt": "2026-03-01T18:00:00Z",
+      "clockedOutAt": "",
+      "clockedInSeconds": 5400,
+      "payRate": "14.50",
+      "job": { "name": "Cashier" },
+      "locationId": 43101562
+    }
+  ]
+}

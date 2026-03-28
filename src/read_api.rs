@@ -9,7 +9,8 @@ use std::collections::BTreeSet;
 use crate::cache::TokenCache;
 use crate::client::SkyTabClient;
 use crate::config::{
-    Config, current_config_file_path, get_default_location_id, legacy_config_file_path,
+    Config, credential_storage_diagnostics, current_config_file_path, get_default_location_id,
+    legacy_config_file_path,
 };
 use crate::error::{Result, SkyTabError};
 
@@ -414,6 +415,7 @@ impl ReadApi {
         let env_username = std::env::var("SKYTAB_USERNAME").ok();
         let env_password = std::env::var("SKYTAB_PASSWORD").ok();
         let env_ok = env_username.is_some() && env_password.is_some();
+        let partial_env = env_username.is_some() ^ env_password.is_some();
 
         let config_path = current_config_file_path();
         let legacy_config_path = legacy_config_file_path();
@@ -435,11 +437,19 @@ impl ReadApi {
             ),
         });
 
+        let credential_diagnostics = credential_storage_diagnostics(self.base_url.clone()).await?;
+        let has_persisted_credentials = credential_diagnostics.keyring_password_present
+            || credential_diagnostics.config_password_present;
+
         checks.push(DoctorCheck {
             name: "env_credentials".to_string(),
-            ok: env_ok || config_exists || legacy_config_exists,
+            ok: if partial_env {
+                false
+            } else {
+                env_ok || has_persisted_credentials
+            },
             detail: format!(
-                "SKYTAB_USERNAME={} SKYTAB_PASSWORD={} (config fallback: {})",
+                "SKYTAB_USERNAME={} SKYTAB_PASSWORD={} (partial_env={} persisted_credentials={})",
                 if env_username.is_some() {
                     "set"
                 } else {
@@ -450,11 +460,26 @@ impl ReadApi {
                 } else {
                     "missing"
                 },
-                if config_exists || legacy_config_exists {
+                if partial_env { "yes" } else { "no" },
+                if has_persisted_credentials {
                     "available"
                 } else {
                     "missing"
                 }
+            ),
+        });
+
+        checks.push(DoctorCheck {
+            name: "credential_store".to_string(),
+            ok: credential_diagnostics.mode != "keyring"
+                || credential_diagnostics.keyring_accessible,
+            detail: format!(
+                "mode={} keyring_supported={} keyring_accessible={} keyring_password_present={} config_password_present={}",
+                credential_diagnostics.mode,
+                credential_diagnostics.keyring_supported,
+                credential_diagnostics.keyring_accessible,
+                credential_diagnostics.keyring_password_present,
+                credential_diagnostics.config_password_present,
             ),
         });
 

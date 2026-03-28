@@ -1,12 +1,13 @@
 use chrono::{DateTime, Utc};
-use clap::Parser;
+use clap::{CommandFactory, Parser};
+use clap_complete::{generate, shells};
 use reqwest::Method;
 use rpassword::prompt_password;
 use serde_json::{Value, json};
 
 use skytab_cli::cli::{
-    AccountsSubcommand, AuthSubcommand, Cli, Commands, HttpMethod, LocationsSubcommand,
-    PaymentsSubcommand, ReportsSubcommand, TimeclockSubcommand,
+    AccountsSubcommand, AuthSubcommand, Cli, Commands, CompletionShell, HttpMethod,
+    LocationsSubcommand, PaymentsSubcommand, ReportsSubcommand, TimeclockSubcommand,
 };
 use skytab_cli::client::SkyTabClient;
 use skytab_cli::config::{
@@ -14,6 +15,7 @@ use skytab_cli::config::{
 };
 use skytab_cli::error::{Result, SkyTabError};
 use skytab_cli::logging::init_tracing;
+use skytab_cli::output;
 use skytab_cli::read_api::{
     DoctorReport, PayrollByEmployeeData, ReadApi, TillTransactionDetailData, parse_query,
 };
@@ -32,11 +34,11 @@ async fn main() {
 async fn run(cli: Cli) -> Result<()> {
     let read_api = ReadApi::new(cli.base_url.clone());
 
-    match cli.command {
+    match cli.command.clone() {
         Commands::Auth(args) => match args.command {
             AuthSubcommand::Login => {
                 let response = read_api.auth_login().await?;
-                print_output(cli.json, &serde_json::to_value(response)?);
+                emit_value(&cli, &serde_json::to_value(response)?)?;
             }
             AuthSubcommand::SetCredentials {
                 username,
@@ -46,21 +48,21 @@ async fn run(cli: Cli) -> Result<()> {
             } => {
                 let password = resolve_set_credentials_password(password, prompt_password)?;
                 let path = save_credentials(username, password, base_url).await?;
-                print_output(
-                    cli.json,
+                emit_value(
+                    &cli,
                     &json!({
                         "ok": true,
                         "config_path": path,
                         "message": "credentials saved"
                     }),
-                );
+                )?;
             }
         },
         Commands::Locations(args) => match args.command {
             LocationsSubcommand::List => {
                 let locations = read_api.locations_list().await?;
-                if cli.json {
-                    print_output(true, &serde_json::to_value(locations)?);
+                if wants_structured_output(&cli) {
+                    emit_value(&cli, &serde_json::to_value(locations)?)?;
                 } else {
                     for location in locations {
                         println!(
@@ -83,37 +85,37 @@ async fn run(cli: Cli) -> Result<()> {
                 }
 
                 let path = save_default_location_id(location_id).await?;
-                print_output(
-                    cli.json,
+                emit_value(
+                    &cli,
                     &json!({
                         "ok": true,
                         "default_location_id": location_id,
                         "config_path": path,
                         "message": "default location saved"
                     }),
-                );
+                )?;
             }
             LocationsSubcommand::ShowDefault => {
                 let response = read_api.locations_show_default().await?;
-                print_output(cli.json, &serde_json::to_value(response)?);
+                emit_value(&cli, &serde_json::to_value(response)?)?;
             }
             LocationsSubcommand::ClearDefault => {
                 let path = clear_default_location_id().await?;
-                print_output(
-                    cli.json,
+                emit_value(
+                    &cli,
                     &json!({
                         "ok": true,
                         "default_location_id": Value::Null,
                         "config_path": path,
                         "message": "default location cleared"
                     }),
-                );
+                )?;
             }
         },
         Commands::Accounts(args) => match args.command {
             AccountsSubcommand::Preferences { account_id } => {
                 let response = read_api.accounts_preferences(&account_id).await?;
-                print_output(cli.json, &serde_json::to_value(response)?);
+                emit_value(&cli, &serde_json::to_value(response)?)?;
             }
         },
         Commands::Reports(args) => match args.command {
@@ -125,8 +127,8 @@ async fn run(cli: Cli) -> Result<()> {
                 let response = read_api
                     .report_activity_summary(start, end, location)
                     .await?;
-                if cli.json {
-                    print_output(true, &serde_json::to_value(response)?);
+                if wants_structured_output(&cli) {
+                    emit_value(&cli, &serde_json::to_value(response)?)?;
                 } else {
                     println!("buckets: {}", response.buckets.len());
                 }
@@ -139,8 +141,8 @@ async fn run(cli: Cli) -> Result<()> {
                 let response = read_api
                     .report_discount_summary(start, end, location)
                     .await?;
-                if cli.json {
-                    print_output(true, &serde_json::to_value(response)?);
+                if wants_structured_output(&cli) {
+                    emit_value(&cli, &serde_json::to_value(response)?)?;
                 } else {
                     println!("rows: {}", response.rows.len());
                 }
@@ -152,8 +154,12 @@ async fn run(cli: Cli) -> Result<()> {
             } => {
                 let response = read_api.report_hourly_sales(start, end, location).await?;
 
-                if cli.json {
-                    print_output(true, &serde_json::to_value(response)?);
+                if wants_structured_output(&cli) {
+                    emit_value_with_schema(
+                        &cli,
+                        &serde_json::to_value(response)?,
+                        Some(output::CsvSchema::HourlySales),
+                    )?;
                 } else {
                     println!("DATE\tHOUR\tGROSS\tNET");
                     for row in response.rows {
@@ -169,8 +175,8 @@ async fn run(cli: Cli) -> Result<()> {
                 let response = read_api
                     .report_ticket_detail_closed(start, end, location)
                     .await?;
-                if cli.json {
-                    print_output(true, &serde_json::to_value(response)?);
+                if wants_structured_output(&cli) {
+                    emit_value(&cli, &serde_json::to_value(response)?)?;
                 } else {
                     println!("rows: {}", response.rows.len());
                 }
@@ -183,8 +189,8 @@ async fn run(cli: Cli) -> Result<()> {
                 let response = read_api
                     .report_sales_summary_by_item(start, end, location)
                     .await?;
-                if cli.json {
-                    print_output(true, &serde_json::to_value(response)?);
+                if wants_structured_output(&cli) {
+                    emit_value(&cli, &serde_json::to_value(response)?)?;
                 } else {
                     println!("rows: {}", response.rows.len());
                 }
@@ -197,8 +203,8 @@ async fn run(cli: Cli) -> Result<()> {
                 let response = read_api
                     .report_sales_summary_by_revenue_class(start, end, location)
                     .await?;
-                if cli.json {
-                    print_output(true, &serde_json::to_value(response)?);
+                if wants_structured_output(&cli) {
+                    emit_value(&cli, &serde_json::to_value(response)?)?;
                 } else {
                     println!("rows: {}", response.rows.len());
                 }
@@ -212,8 +218,8 @@ async fn run(cli: Cli) -> Result<()> {
                     .report_till_transaction(start, end, location)
                     .await?;
 
-                if cli.json {
-                    print_output(true, &serde_json::to_value(response)?);
+                if wants_structured_output(&cli) {
+                    emit_value(&cli, &serde_json::to_value(response)?)?;
                 } else {
                     print_till_transaction_human(&response);
                 }
@@ -225,8 +231,12 @@ async fn run(cli: Cli) -> Result<()> {
             } => {
                 let response = read_api.report_payroll(start, end, location).await?;
 
-                if cli.json {
-                    print_output(true, &serde_json::to_value(response)?);
+                if wants_structured_output(&cli) {
+                    emit_value_with_schema(
+                        &cli,
+                        &serde_json::to_value(response)?,
+                        Some(output::CsvSchema::Payroll),
+                    )?;
                 } else {
                     print_payroll_human(&response);
                 }
@@ -243,8 +253,12 @@ async fn run(cli: Cli) -> Result<()> {
                 let result = read_api
                     .timeclock_shifts(location_id, start, end, order, limit)
                     .await?;
-                if cli.json {
-                    print_output(true, &serde_json::to_value(result)?);
+                if wants_structured_output(&cli) {
+                    emit_value_with_schema(
+                        &cli,
+                        &serde_json::to_value(result)?,
+                        Some(output::CsvSchema::TimeclockShifts),
+                    )?;
                 } else {
                     print_timeclock_shifts_human(&result.time_clock_shifts);
                 }
@@ -260,21 +274,26 @@ async fn run(cli: Cli) -> Result<()> {
                 let result = read_api
                     .payments_transactions(start, end, location, order_type)
                     .await?;
-                if cli.json {
-                    print_output(true, &serde_json::to_value(result)?);
+                if wants_structured_output(&cli) {
+                    emit_value_with_schema(
+                        &cli,
+                        &serde_json::to_value(result)?,
+                        Some(output::CsvSchema::PaymentsTransactions),
+                    )?;
                 } else {
                     println!("count: {}", result.count);
                 }
             }
         },
         Commands::Request(args) => {
+            ensure_mutating_request_allowed(&args.method, args.allow_write)?;
             let query_pairs = parse_query(&args.query)?;
             let path = args.path;
 
             match args.method {
                 HttpMethod::Get => {
                     let response = read_api.request_get(path, query_pairs).await?;
-                    print_output(true, &response);
+                    emit_request_value(&cli, &response)?;
                 }
                 method => {
                     let client = build_client(cli.base_url.clone()).await?;
@@ -286,30 +305,39 @@ async fn run(cli: Cli) -> Result<()> {
                     let response: Value = client
                         .request_authed_json(map_method(method), &path, &query_pairs, body)
                         .await?;
-                    print_output(true, &response);
+                    emit_request_value(&cli, &response)?;
                 }
             }
         }
+        Commands::Completion(args) => {
+            if cli.json || cli.format.is_some() {
+                return Err(SkyTabError::InvalidArgument(
+                    "completion command does not support --json or --format".into(),
+                ));
+            }
+
+            let script = render_completion_script(args.shell)?;
+            output::write_text(&script, cli.output.as_deref())?;
+        }
         Commands::Doctor => {
             let report = read_api.doctor_report().await?;
-            print_doctor_report(&report, cli.json)?;
+            if wants_structured_output(&cli) {
+                emit_value(&cli, &serde_json::to_value(report)?)?;
+            } else {
+                print_doctor_report(&report);
+            }
         }
     }
 
     Ok(())
 }
 
-fn print_doctor_report(report: &DoctorReport, json_mode: bool) -> Result<()> {
-    if json_mode {
-        print_output(true, &serde_json::to_value(report)?);
-    } else {
-        println!("Doctor: {}", if report.ok { "OK" } else { "ISSUES FOUND" });
-        for check in &report.checks {
-            let status = if check.ok { "OK" } else { "FAIL" };
-            println!("[{status}] {:<22} {}", check.name, check.detail);
-        }
+fn print_doctor_report(report: &DoctorReport) {
+    println!("Doctor: {}", if report.ok { "OK" } else { "ISSUES FOUND" });
+    for check in &report.checks {
+        let status = if check.ok { "OK" } else { "FAIL" };
+        println!("[{status}] {:<22} {}", check.name, check.detail);
     }
-    Ok(())
 }
 
 async fn build_client(base_url: Option<String>) -> Result<SkyTabClient> {
@@ -327,18 +355,74 @@ fn map_method(method: HttpMethod) -> Method {
     }
 }
 
-fn print_output(json_mode: bool, value: &Value) {
-    if json_mode {
-        println!(
-            "{}",
-            serde_json::to_string_pretty(value).unwrap_or_else(|_| "{}".to_string())
-        );
-    } else {
-        println!(
-            "{}",
-            serde_json::to_string(value).unwrap_or_else(|_| "{}".to_string())
+fn ensure_mutating_request_allowed(method: &HttpMethod, allow_write: bool) -> Result<()> {
+    if is_mutating_method(method) && !allow_write {
+        return Err(SkyTabError::InvalidArgument(
+            "mutating request blocked; pass --allow-write to execute POST/PUT/PATCH/DELETE".into(),
+        ));
+    }
+
+    Ok(())
+}
+
+fn is_mutating_method(method: &HttpMethod) -> bool {
+    matches!(
+        method,
+        HttpMethod::Post | HttpMethod::Put | HttpMethod::Patch | HttpMethod::Delete
+    )
+}
+
+fn render_completion_script(shell: CompletionShell) -> Result<String> {
+    let mut command = Cli::command();
+    let mut output_buffer = Vec::<u8>::new();
+
+    match shell {
+        CompletionShell::Bash => generate(shells::Bash, &mut command, "skytab", &mut output_buffer),
+        CompletionShell::Zsh => generate(shells::Zsh, &mut command, "skytab", &mut output_buffer),
+        CompletionShell::Fish => generate(shells::Fish, &mut command, "skytab", &mut output_buffer),
+    }
+
+    String::from_utf8(output_buffer)
+        .map_err(|_| SkyTabError::InvalidArgument("completion output is not valid UTF-8".into()))
+}
+
+fn wants_structured_output(cli: &Cli) -> bool {
+    cli.json || cli.format.is_some() || cli.output.is_some()
+}
+
+fn emit_value(cli: &Cli, value: &Value) -> Result<()> {
+    emit_value_with_schema(cli, value, None)
+}
+
+fn emit_value_with_schema(
+    cli: &Cli,
+    value: &Value,
+    csv_schema: Option<output::CsvSchema>,
+) -> Result<()> {
+    if let Some(format) = cli.format {
+        return output::write_structured_value_with_schema(
+            value,
+            format,
+            cli.output.as_deref(),
+            csv_schema,
         );
     }
+
+    let rendered = if cli.json || cli.output.is_some() {
+        serde_json::to_string_pretty(value).unwrap_or_else(|_| "{}".to_string())
+    } else {
+        serde_json::to_string(value).unwrap_or_else(|_| "{}".to_string())
+    };
+    output::write_text(&rendered, cli.output.as_deref())
+}
+
+fn emit_request_value(cli: &Cli, value: &Value) -> Result<()> {
+    if let Some(format) = cli.format {
+        return output::write_structured_value(value, format, cli.output.as_deref());
+    }
+
+    let rendered = serde_json::to_string_pretty(value).unwrap_or_else(|_| "{}".to_string());
+    output::write_text(&rendered, cli.output.as_deref())
 }
 
 fn print_timeclock_shifts_human(shifts: &[Value]) {
@@ -552,5 +636,49 @@ fn resolve_set_credentials_password(password: Option<String>, prompt_mode: bool)
             }
             Ok(entered)
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn mutating_methods_require_allow_write() {
+        let blocked_post = ensure_mutating_request_allowed(&HttpMethod::Post, false)
+            .expect_err("post should be blocked without allow-write");
+        let blocked_put = ensure_mutating_request_allowed(&HttpMethod::Put, false)
+            .expect_err("put should be blocked without allow-write");
+        let blocked_patch = ensure_mutating_request_allowed(&HttpMethod::Patch, false)
+            .expect_err("patch should be blocked without allow-write");
+        let blocked_delete = ensure_mutating_request_allowed(&HttpMethod::Delete, false)
+            .expect_err("delete should be blocked without allow-write");
+
+        for blocked in [blocked_post, blocked_put, blocked_patch, blocked_delete] {
+            match blocked {
+                SkyTabError::InvalidArgument(message) => {
+                    assert!(message.contains("--allow-write"));
+                }
+                other => panic!("unexpected error: {other}"),
+            }
+        }
+    }
+
+    #[test]
+    fn allow_write_permits_mutating_methods() {
+        ensure_mutating_request_allowed(&HttpMethod::Post, true)
+            .expect("post should be allowed with --allow-write");
+        ensure_mutating_request_allowed(&HttpMethod::Put, true)
+            .expect("put should be allowed with --allow-write");
+        ensure_mutating_request_allowed(&HttpMethod::Patch, true)
+            .expect("patch should be allowed with --allow-write");
+        ensure_mutating_request_allowed(&HttpMethod::Delete, true)
+            .expect("delete should be allowed with --allow-write");
+    }
+
+    #[test]
+    fn get_request_never_requires_allow_write() {
+        ensure_mutating_request_allowed(&HttpMethod::Get, false)
+            .expect("get should never require --allow-write");
     }
 }

@@ -43,6 +43,12 @@ Config path:
 - macOS: `~/Library/Application Support/skytab/config.toml`
 - Linux: `~/.config/skytab/config.toml`
 
+Credential storage mode (optional):
+
+- `SKYTAB_CREDENTIAL_STORE=auto` (default): keyring first, config fallback
+- `SKYTAB_CREDENTIAL_STORE=keyring`: require keyring
+- `SKYTAB_CREDENTIAL_STORE=config`: legacy plaintext config mode
+
 ## Coding Workflow
 
 1. Make your changes.
@@ -59,6 +65,18 @@ Run MCP protocol tests explicitly:
 
 ```bash
 cargo test --test mcp_tools_list
+```
+
+Run CSV schema golden tests explicitly:
+
+```bash
+cargo test --test csv_schema_golden
+```
+
+If CSV schema output intentionally changes, regenerate expected fixtures:
+
+```bash
+./scripts/update-csv-fixtures.sh
 ```
 
 Suggested manual smoke test:
