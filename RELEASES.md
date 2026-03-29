@@ -19,12 +19,13 @@ When you push a tag like `v0.1.0`, GitHub Actions runs `.github/workflows/releas
 
 The workflow:
 
-1. Builds `skytab` in release mode for:
+1. Builds release binaries in release mode for:
    - `x86_64-unknown-linux-musl`
    - `aarch64-apple-darwin`
    - `x86_64-apple-darwin`
 2. Packages each build into a `.tar.gz` archive with:
    - `skytab` binary
+   - `skytab-mcp` binary
    - `README.md`
    - `LICENSE`
 3. Generates `checksums.txt` (SHA256 for all archives).
@@ -98,4 +99,4 @@ Avoid deleting/reusing published tags unless absolutely necessary.
 ## Notes
 
 - Workflow also supports manual run via `workflow_dispatch`, but tag-based release is the canonical path.
-- Release binaries are named `skytab`.
+- Release archives include `skytab` and `skytab-mcp` binaries.

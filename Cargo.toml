@@ -1,6 +1,6 @@
 [package]
 name = "skytab-cli"
-version = "0.1.0"
+version = "0.1.5"
 edition = "2024"
 default-run = "skytab"
 description = "Rust CLI for interacting with the SkyTab API"

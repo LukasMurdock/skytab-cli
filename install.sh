@@ -81,7 +81,7 @@ resolve_version() {
 
   if [ -z "$latest_tag" ]; then
     echo "Error: unable to determine a published release tag" >&2
-    echo "Try passing a specific tag: VERSION=v0.1.0" >&2
+    echo "Try passing a specific tag: VERSION=vX.Y.Z" >&2
     exit 1
   fi
 

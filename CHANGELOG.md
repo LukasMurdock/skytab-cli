@@ -6,6 +6,8 @@ The format is based on Keep a Changelog and this project uses Semantic Versionin
 
 ## [Unreleased]
 
+## [0.1.5] - 2026-03-29
+
 ### Added
 
 - add `skytab-mcp`, a read-only MCP server exposing auth, locations, reports, timeclock, payments, request GET, and doctor tools.
@@ -54,6 +56,24 @@ The format is based on Keep a Changelog and this project uses Semantic Versionin
 - document single-location auto-selection in `README.md`.
 - add explicit `CHANGELOG.md` update step to `RELEASES.md` checklist.
 
+## [0.1.3] - 2026-03-03
+
+### Changed
+
+- publish installer script as release asset.
+
+## [0.1.2] - 2026-03-03
+
+### Changed
+
+- fix release matrix for supported macOS runners.
+
+## [0.1.1] - 2026-03-03
+
+### Added
+
+- add release docs and one-line installer.
+
 ## [0.1.0] - 2026-03-03
 
 ### Added
@@ -63,6 +83,10 @@ The format is based on Keep a Changelog and this project uses Semantic Versionin
 - default location support.
 - release workflow for macOS and Linux artifacts.
 
-[Unreleased]: https://github.com/LukasMurdock/skytab-cli/compare/v0.1.4...HEAD
-[0.1.4]: https://github.com/LukasMurdock/skytab-cli/releases/tag/v0.1.4
+[Unreleased]: https://github.com/LukasMurdock/skytab-cli/compare/v0.1.5...HEAD
+[0.1.5]: https://github.com/LukasMurdock/skytab-cli/compare/v0.1.4...v0.1.5
+[0.1.4]: https://github.com/LukasMurdock/skytab-cli/compare/v0.1.3...v0.1.4
+[0.1.3]: https://github.com/LukasMurdock/skytab-cli/compare/v0.1.2...v0.1.3
+[0.1.2]: https://github.com/LukasMurdock/skytab-cli/compare/v0.1.1...v0.1.2
+[0.1.1]: https://github.com/LukasMurdock/skytab-cli/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/LukasMurdock/skytab-cli/releases/tag/v0.1.0
